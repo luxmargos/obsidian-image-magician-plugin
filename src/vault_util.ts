@@ -1,29 +1,31 @@
 import { TAbstractFile, TFile } from "obsidian";
 import { PluginContext } from "./app_types";
+import * as pb from "path-browserify";
 
-export type TUnionFile = TFile | TAbstractFile;
+export const isTFile = (file: TAbstractFile, ext?: string) => {
+	// const result =
+	// 	(file as any)["stat"] !== undefined &&
+	// 	(file as any)["extension"] !== undefined;
 
-export const isTFile = (file: TUnionFile, ext?: string) => {
-	const result =
-		(file as any)["stat"] !== undefined &&
-		(file as any)["extension"] !== undefined;
+	const result = file instanceof TFile;
 	if (result && ext !== undefined) {
 		return (file as TFile).extension.toLowerCase() === ext.toLowerCase();
 	}
 	return result;
 };
 
-export const asTFile = (context: PluginContext, file: TUnionFile) => {
+export const asTFile = (
+	context: PluginContext,
+	file: TAbstractFile
+): TFile | undefined => {
 	if (isTFile(file)) {
 		return file as TFile;
 	}
 
-	return context.plugin.app.vault.getFiles().find((item: TFile) => {
-		return file.path === item.path;
-	});
+	return findValutFile(context, file.path);
 };
 
-export const asTFileOrThrow = (context: PluginContext, file: TUnionFile) => {
+export const asTFileOrThrow = (context: PluginContext, file: TAbstractFile) => {
 	const result = asTFile(context, file);
 	if (!result) {
 		throw new Error("Not a file");
@@ -33,9 +35,22 @@ export const asTFileOrThrow = (context: PluginContext, file: TUnionFile) => {
 
 export const findValutFile = (
 	context: PluginContext,
-	path: string
+	path: string,
+	strictMode: boolean = true
 ): TFile | undefined => {
-	return context.plugin.app.vault.getFiles().find((f: TFile) => {
+	const files = context.plugin.app.vault.getFiles();
+
+	let result: TFile | undefined = files.find((f: TFile) => {
 		return f.path === path;
-	});
+	}) as TFile;
+
+	// I think this is the link search behaviour of obsidian
+	if (!result && strictMode === false) {
+		result = files.find((f: TFile) => {
+			//TEST : 'test.md' will be matched with 'FOLDER/test.md'
+			return f.path.endsWith(path);
+		});
+	}
+
+	return result;
 };

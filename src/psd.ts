@@ -1,17 +1,12 @@
 import Psd from "@webtoon/psd";
 import { PluginContext } from "./app_types";
-import {
-	TUnionFile,
-	asTFile,
-	asTFileOrThrow,
-	findValutFile,
-} from "./vault_util";
+import { asTFile, asTFileOrThrow, findValutFile } from "./vault_util";
 import { FileFormat, getExportFilePath, isImageFormat } from "./exporter";
-import { TFile } from "obsidian";
+import { TAbstractFile, TFile } from "obsidian";
 
 export const drawPsd = async (
 	context: PluginContext,
-	psdFile: TUnionFile,
+	psdFile: TAbstractFile,
 	el: HTMLElement
 ): Promise<HTMLCanvasElement> => {
 	const canvasElement: HTMLCanvasElement = document.createElement("canvas");
@@ -49,7 +44,7 @@ export const drawPsd = async (
 
 export const exportPsdToAny = async (
 	context: PluginContext,
-	psdFile: TUnionFile,
+	psdFile: TAbstractFile,
 	exportFormat: FileFormat,
 	refElement: HTMLElement
 ) => {
@@ -81,16 +76,16 @@ export const exportPsdToAny = async (
 				const ab = await blob.arrayBuffer();
 
 				if (!pngFile) {
-					console.log("context.plugin.app.vault.createBinary");
+					// console.log("context.plugin.app.vault.createBinary");
 					const tf = await context.plugin.app.vault.createBinary(
 						pngPath,
 						ab
 					);
 					console.log("png created : ", tf);
 				} else {
-					console.log("context.plugin.app.vault.modifyBinary");
+					// console.log("context.plugin.app.vault.modifyBinary");
 					await context.plugin.app.vault.modifyBinary(pngFile, ab);
-					console.log("png modified : ", pngFile);
+					// console.log("png modified : ", pngFile);
 				}
 			},
 			exportFormat.mimeType,

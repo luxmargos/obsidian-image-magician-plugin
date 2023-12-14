@@ -97,8 +97,10 @@ ${propName}: true
 
 	const mdFile = findValutFile(context, mdPath);
 	if (mdFile) {
-		// console.log(mdFile.parent, "modify : ", markdownContent);
-		await context.plugin.app.vault.modify(mdFile, markdownContent);
+		if (targetFile.stat.mtime > mdFile.stat.mtime) {
+			// console.log("modify : ", markdownContent);
+			await context.plugin.app.vault.modify(mdFile, markdownContent);
+		}
 	} else {
 		// console.log(mdPath, "create new : ", markdownContent);
 		await context.plugin.app.vault.create(mdPath, markdownContent);

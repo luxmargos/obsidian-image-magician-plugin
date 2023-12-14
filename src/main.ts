@@ -21,8 +21,8 @@ import {
 	ViewCreator,
 	WorkspaceLeaf,
 } from "obsidian";
-import { PluginContext, TypedPluginContext } from "./app_types";
-import { TUnionFile, findValutFile, isTFile } from "./vault_util";
+import { TypedPluginContext } from "./app_types";
+import { findValutFile, isTFile } from "./vault_util";
 import {
 	FileFormat,
 	buildExportFilePath,
@@ -32,6 +32,7 @@ import {
 	embedMarkDownCreator,
 } from "./exporter";
 import { drawPsd, exportPsdToAny } from "./psd";
+import { livePreviewExtension } from "./live_preview";
 
 type PsdSupportPluginContext = TypedPluginContext<PsdSupportPlugin>;
 
@@ -75,13 +76,15 @@ const DEFAULT_SETTINGS: PsdSupportPluginSettings = {
 
 export default class PsdSupportPlugin extends Plugin {
 	settings: PsdSupportPluginSettings;
+	vaultHandler: VaultHandler;
+	context: PsdSupportPluginContext;
 
 	async onload() {
 		await this.loadSettings();
 
-		const context: PsdSupportPluginContext = { plugin: this };
+		this.context = { plugin: this };
 		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new PsdSupportSettingTab(context));
+		this.addSettingTab(new PsdSupportSettingTab(this.context));
 
 		const PsdFileViewCreator: ViewCreator = (leaf: WorkspaceLeaf) => {
 			return new PsdFileView(this, leaf);
@@ -97,12 +100,41 @@ export default class PsdSupportPlugin extends Plugin {
 		// Using the onLayoutReady event will help to avoid massive vault.on('create') event on startup.
 		this.app.workspace.onLayoutReady(() => {
 			this.handleOnLayoutReady();
-			new VaultHandler(context);
+			this.vaultHandler = new VaultHandler(this.context);
+			this.vaultHandler.fullScan();
 		});
 	}
 
 	private handleOnLayoutReady() {
-		this.registerMarkdownPostProcessor(markdownPostProcessor);
+		// this.setupHoverLink();
+		this.setupMarkdownPostProcessor();
+		this.setupLivePreview();
+	}
+
+	setupMarkdownPostProcessor() {
+		this.registerMarkdownPostProcessor(markdownPostProcessor(this.context));
+	}
+
+	setupHoverLink() {
+		// internal-link quick preview
+		// this.registerHoverLinkSource(VIEW_TYPE_PSD, {
+		// 	defaultMod: false,
+		// 	display: "PSD Support Plugin",
+		// });
+
+		// internal-link quick preview
+		this.registerEvent(
+			this.app.workspace.on("hover-link", (e: any) => {
+				// console.log("hover-link", e);
+			})
+		);
+	}
+
+	/**
+	 * Handle live preview in live edit mode
+	 */
+	setupLivePreview() {
+		this.registerEditorExtension(livePreviewExtension(this.context));
 	}
 
 	onunload() {}
@@ -235,6 +267,15 @@ class VaultHandler {
 		this.context.plugin.registerEvent(renameEvtRef);
 	}
 
+	fullScan() {
+		for (const file of this.context.plugin.app.vault.getFiles()) {
+			if (!isTFile(file, EXT_PSD)) {
+				continue;
+			}
+			this.runExport(file as TFile);
+		}
+	}
+
 	createExportElement = () => {
 		const div = document.createElement("div");
 		document.body.append(div);
@@ -302,9 +343,9 @@ class VaultHandler {
 				fmt
 			);
 
+			//renaming with FileManager is more safer than Valut
 			this.context.plugin.app.fileManager
 				.renameFile(exportedFile, newExportedFileNPath)
-				// this.context.plugin.app.vault.rename(exportedFile, newExportedFileNPath)
 				.then(() => {
 					console.log("rename complete!");
 				})
@@ -400,76 +441,13 @@ class PsdSupportSettingTab extends PluginSettingTab {
 	}
 }
 
-const markdownPostProcessor = async (
-	el: HTMLElement,
-	ctx: MarkdownPostProcessorContext
-) => {
-	console.log("markdownPostProcessor", "el : ", el, "ctx:", ctx);
-	//check to see if we are rendering in editing mode or live preview
-	//if yes, then there should be no .internal-embed containers
-	// const embeddedItems = el.querySelectorAll(".internal-embed");
-	// if (embeddedItems.length === 0) {
-	// 	//   tmpObsidianWYSIWYG(el, ctx);
-	// 	return;
-	// }
+const markdownPostProcessor = (context: TypedPluginContext) => {
+	return async (el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
+		console.log("markdownPostProcessor", "el : ", el, "ctx:", ctx);
+		//check to see if we are rendering in editing mode or live preview
+		//if yes, then there should be no .internal-embed containers
+		const embeddedItems = el.querySelectorAll(".internal-embed");
 
-	// console.log(el);
-};
-
-/**
- * @deprecated
- */
-class FieldSuggester extends EditorSuggest<string> {
-	plugin: PsdSupportPlugin;
-	suggestType: "psd";
-	latestTriggerInfo: EditorSuggestTriggerInfo;
-
-	constructor(plugin: PsdSupportPlugin) {
-		super(plugin.app);
-		this.plugin = plugin;
-	}
-
-	onTrigger(
-		cursor: EditorPosition,
-		editor: Editor,
-		file: TFile
-	): EditorSuggestTriggerInfo | null {
-		console.log("onTrigger");
-		if (true) {
-			const sub = editor.getLine(cursor.line).substring(0, cursor.ch);
-			const line = editor.getLine(cursor.line);
-			console.log("sub", sub);
-			console.log("line", line);
-			const match = line.match(/\[.*psd/);
-			console.log("match", match);
-			// if (match !== undefined) {
-			//   this.suggestType = 'psd';
-			//   this.latestTriggerInfo = {
-			// 	end: cursor,
-			// 	start: {
-			// 	  ch: cursor.ch - match.length,
-			// 	  line: cursor.line,
-			// 	},
-			// 	query: match,
-			//   };
-			//   return this.latestTriggerInfo;
-			// }
-		}
-		return null;
-	}
-
-	getSuggestions = (context: EditorSuggestContext) => {
-		const query = context.query.toLowerCase();
-		return ["psd"];
+		// console.log(el);
 	};
-
-	renderSuggestion(suggestion: string, el: HTMLElement): void {
-		return;
-	}
-
-	selectSuggestion(suggestion: string): void {
-		const { context } = this;
-		if (context) {
-		}
-	}
-}
+};
