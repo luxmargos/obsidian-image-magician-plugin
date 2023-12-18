@@ -1,15 +1,16 @@
 import { TAbstractFile, TFile } from "obsidian";
-import { PluginContext } from "./app_types";
 import * as pb from "path-browserify";
+import { PluginContext } from "./context";
 
-export const isTFile = (file: TAbstractFile, ext?: string) => {
+export const isTFile = (file: TAbstractFile, allowedExts?: string[]) => {
 	// const result =
 	// 	(file as any)["stat"] !== undefined &&
 	// 	(file as any)["extension"] !== undefined;
 
 	const result = file instanceof TFile;
-	if (result && ext !== undefined) {
-		return (file as TFile).extension.toLowerCase() === ext.toLowerCase();
+	if (result && allowedExts) {
+		const extLower = (file as TFile).extension.toLowerCase();
+		return allowedExts.contains(extLower);
 	}
 	return result;
 };

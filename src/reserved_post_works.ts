@@ -6,14 +6,14 @@ import {
 	EditorSuggestTriggerInfo,
 	TFile,
 } from "obsidian";
-import PsdSupportPlugin from "./main";
+import ImgMagicianPlugin from "./main";
 
 class FieldSuggester extends EditorSuggest<string> {
-	plugin: PsdSupportPlugin;
+	plugin: ImgMagicianPlugin;
 	suggestType: "psd";
 	latestTriggerInfo: EditorSuggestTriggerInfo;
 
-	constructor(plugin: PsdSupportPlugin) {
+	constructor(plugin: ImgMagicianPlugin) {
 		super(plugin.app);
 		this.plugin = plugin;
 	}

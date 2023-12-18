@@ -1,7 +1,7 @@
 import { TFile } from "obsidian";
-import { PluginContext } from "./app_types";
 import * as pb from "path-browserify";
 import { findValutFile } from "./vault_util";
+import { PluginContext } from "./context";
 
 export type FileFormat = {
 	mimeType: string;
@@ -10,6 +10,7 @@ export type FileFormat = {
 };
 
 export const isImageFormat = (exportFileFormat: FileFormat): boolean => {
+	console.log("isImageFormat : ", exportFileFormat);
 	return (
 		imageFormatList.findIndex((item: FileFormat) => {
 			return (

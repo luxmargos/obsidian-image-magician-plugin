@@ -1,5 +1,3 @@
-import { PluginContext } from "./app_types";
-
 import {
 	App,
 	TAbstractFile,
@@ -18,9 +16,8 @@ import {
 } from "@codemirror/view";
 
 import type { PluginValue } from "@codemirror/view";
-import { RangeSetBuilder } from "@codemirror/state";
-import { syntaxTree } from "@codemirror/language";
 import { findValutFile } from "./vault_util";
+import { PluginContext } from "./context";
 
 export const livePreviewExtension = (context: PluginContext) =>
 	ViewPlugin.fromClass(
