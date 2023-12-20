@@ -23,7 +23,7 @@ export const asTFile = (
 		return file as TFile;
 	}
 
-	return findValutFile(context, file.path);
+	return undefined;
 };
 
 export const asTFileOrThrow = (context: PluginContext, file: TAbstractFile) => {

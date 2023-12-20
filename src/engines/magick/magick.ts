@@ -1,45 +1,71 @@
-import { asTFile, asTFileOrThrow, findValutFile } from "../../vault_util";
-import { FileFormat, getExportFilePath, isImageFormat } from "../../exporter";
+import { asTFile } from "../../vault_util";
+import { ExportFormat } from "../../exporter";
 import { TAbstractFile, TFile } from "obsidian";
 import { IMagickImage, ImageMagick } from "@imagemagick/magick-wasm";
-import { PluginImageEngine, exportCanvasWithBlob } from "../imgEngine";
-import { PluginContext } from "src/context";
+import {
+	PluginImageEngine,
+	exportCanvasWithBlob,
+	resolveExportData,
+} from "../imgEngine";
+import { MainPluginContext } from "src/context";
 
 export class PluginMagickEngine implements PluginImageEngine {
 	draw(
-		context: PluginContext,
-		imgFile: TAbstractFile,
+		context: MainPluginContext,
+		imgFile: TFile,
 		el: HTMLElement
 	): Promise<HTMLCanvasElement> {
-		return new Promise<HTMLCanvasElement>(async (resolve, reject) => {
-			const canvasElement: HTMLCanvasElement = el.createEl("canvas");
+		return new Promise(async (resolve, reject) => {
+			let cv: HTMLCanvasElement | null = el.querySelector(
+				"canvas.imgk-plugin-item"
+			);
+			if (!cv) {
+				cv = el.createEl("canvas", { cls: "imgk-plugin-item" });
+				console.log("create canvas element");
+			} else {
+				console.log("reuse canvas element");
+			}
+
+			try {
+				await this.drawOnCanvas(context, imgFile, cv);
+				resolve(cv);
+			} catch (e) {
+				reject(e);
+			}
+		});
+	}
+
+	drawOnCanvas(
+		context: MainPluginContext,
+		imgFile: TFile,
+		cv: HTMLCanvasElement
+	): Promise<void> {
+		return new Promise<void>(async (resolve, reject) => {
 			const canvasContext: CanvasRenderingContext2D | null =
-				canvasElement.getContext("2d");
+				cv.getContext("2d");
 
 			if (!canvasContext) {
 				reject(new Error(`Context error`));
 				return;
 			}
 
-			const psdTFile = asTFile(context, imgFile);
-			if (!psdTFile) {
+			const imgTFile = asTFile(context, imgFile);
+			if (!imgTFile) {
 				reject(new Error("Could not read file"));
 				return;
 			}
 
 			try {
 				const buff: ArrayBuffer =
-					await context.plugin.app.vault.readBinary(psdTFile);
+					await context.plugin.app.vault.readBinary(imgTFile);
 				const byteArr = new Uint8Array(buff);
 				await ImageMagick.read(byteArr, async (img: IMagickImage) => {
-					canvasElement.width = img.width;
-					canvasElement.height = img.height;
-					img.writeToCanvas(canvasElement);
-					console.log("write to canvas");
+					// canvasElement.width = img.width;
+					// canvasElement.height = img.height;
+					img.writeToCanvas(cv);
 				});
 
-				console.log("resolve");
-				resolve(canvasElement);
+				resolve();
 			} catch (e) {
 				reject(e);
 			}
@@ -47,54 +73,32 @@ export class PluginMagickEngine implements PluginImageEngine {
 	}
 
 	export(
-		context: PluginContext,
-		source: TAbstractFile,
-		exportFormat: FileFormat,
+		context: MainPluginContext,
+		source: TFile,
+		exportFormat: ExportFormat,
 		refElement: HTMLElement
 	): Promise<void> {
 		return new Promise(async (resolve, reject) => {
-			let sourceTFile: TFile | undefined;
-
-			try {
-				sourceTFile = asTFileOrThrow(context, source);
-			} catch (e) {
-				reject(e);
-				return;
-			}
-
-			const exportPath: string = getExportFilePath(
-				context,
-				sourceTFile,
-				exportFormat
-			);
-			const exportFile: TFile | undefined = findValutFile(
-				context,
-				exportPath
-			);
-
-			const exportImge: boolean =
-				!exportFile || sourceTFile.stat.mtime > exportFile.stat.mtime;
-
-			if (!exportImge) {
+			const exportData = resolveExportData(context, source, exportFormat);
+			if (exportData.isLatest) {
 				resolve();
 				return;
 			}
 
-			const canvasElement: HTMLCanvasElement = await this.draw(
-				context,
-				source,
-				refElement
-			);
-
 			try {
+				const canvasElement: HTMLCanvasElement = await this.draw(
+					context,
+					source,
+					refElement
+				);
+
 				await exportCanvasWithBlob(
 					context,
 					canvasElement,
 					exportFormat,
-					1,
 					true,
-					exportPath,
-					exportFile
+					exportData.path,
+					exportData.file
 				);
 
 				resolve();

@@ -1,40 +1,29 @@
 import { TAbstractFile, TFile } from "obsidian";
 import { MainPluginContext } from "./context";
 import {
-	FileFormat,
+	ExportFormat,
 	buildExportFilePath,
-	embedMarkDownCreator,
 	getExportFilePath,
-	isImageFormat,
+	isImageExportFormat,
 } from "./exporter";
 import { PIE } from "./engines/imgEngines";
-import { EMBED_PSD_MD_EXT, isImageTFile } from "./settings";
-import { findValutFile } from "./vault_util";
-
-const EMBED_PSD_PLUGIN_PROP = "psdsupport-plugin";
+import { findValutFile, isTFile } from "./vault_util";
 
 const exportBatch = async (
 	context: MainPluginContext,
 	psdFile: TFile,
-	exportFormats: FileFormat[],
+	exportFormats: ExportFormat[],
 	refElement: HTMLElement
 ) => {
-	console.log("export batch : ", exportFormats);
 	for (const exp of exportFormats) {
-		// try {
-		if (isImageFormat(exp)) {
-			await PIE.magick().export(context, psdFile, exp, refElement);
-		} else if (exp.ext === EMBED_PSD_MD_EXT) {
-			await embedMarkDownCreator(
-				context,
-				psdFile,
-				exp,
-				EMBED_PSD_PLUGIN_PROP
-			);
+		try {
+			if (isImageExportFormat(exp)) {
+				await PIE.magick().export(context, psdFile, exp, refElement);
+			}
+		} catch (err) {
+			// TODO: Handle error
+			// console.log("error!", err);
 		}
-		// } catch (err) {
-		// 	console.log("error!", err);
-		// }
 	}
 };
 
@@ -67,7 +56,12 @@ export class VaultHandler {
 
 	fullScan() {
 		for (const file of this.context.plugin.app.vault.getFiles()) {
-			if (!isImageTFile(file)) {
+			if (
+				!isTFile(
+					file,
+					this.context.plugin.settingsUtil.getSupportedFormats()
+				)
+			) {
 				continue;
 			}
 			this.runExport(file as TFile);
@@ -83,16 +77,21 @@ export class VaultHandler {
 	getSettingsUtil() {
 		return this.context.plugin.settingsUtil;
 	}
+
 	getSettings() {
 		return this.context.plugin.settings;
 	}
 
 	getExportFormats() {
-		return this.getSettingsUtil().getExportFormats(this.getSettings());
+		return this.getSettingsUtil().getExportFormats();
+	}
+
+	getSupportedFormats() {
+		return this.getSettingsUtil().getSupportedFormats();
 	}
 
 	runExport(file: TFile) {
-		console.log("runExport : ", file);
+		// console.log("runExport : ", file);
 		const contEl = this.createExportElement();
 		exportBatch(this.context, file, this.getExportFormats(), contEl)
 			.then(() => {})
@@ -105,25 +104,25 @@ export class VaultHandler {
 	}
 
 	onCreate(file: TAbstractFile) {
-		console.log("on create : ", file);
-		if (!isImageTFile(file)) {
+		// console.log("on create : ", file);
+		if (!isTFile(file, this.getSupportedFormats())) {
 			return;
 		}
 		this.runExport(file as TFile);
 	}
 
 	onModify(file: TAbstractFile) {
-		console.log("on modify : ", file);
-		if (!isImageTFile(file)) {
+		// console.log("on modify : ", file);
+		if (!isTFile(file, this.getSupportedFormats())) {
 			return;
 		}
 		this.runExport(file as TFile);
 	}
 
 	onRename(file: TAbstractFile, oldPath: string) {
-		console.log("on rename : ", oldPath, "->", file);
+		// console.log("on rename : ", oldPath, "->", file);
 
-		if (!isImageTFile(file)) {
+		if (!isTFile(file, this.getSupportedFormats())) {
 			return;
 		}
 		this.groupRename(file as TFile, oldPath);
@@ -211,7 +210,7 @@ export class VaultHandler {
 	onDelete(file: TAbstractFile) {
 		// console.log("on delete : ", file);
 
-		if (!isImageTFile(file)) {
+		if (!isTFile(file, this.getSupportedFormats())) {
 			return;
 		}
 

@@ -22,20 +22,10 @@ Also you can embed any image directly such as psd, tiff, heic that plugin has su
 Although, I recommend that embed an image as highly supported format such as jpg, png, etc, because you should consider publishment workflow.
 Plugin's export feature will help it.
 
-## Known problems
+## Image formats
 
-### Link suggestion
-
-This problem(or just intended flow of an obsidian) has been found at least obsidian 0.15.0.
-You might have not shown link suggestion when you embed 3rd party images that are not default supported in obsidian.
-You can resolve it through turning on the 'Settings > File & Links > Detect all file extensions'.
-And another way, use a plugin such as [Boost Link Suggestions](https://github.com/jglev/obsidian-boost-link-suggestions).
-
-## Renders checklist
-
-The document of imagemagick, there are listed several formats (100+),
-but as I confirmed some of formats has been incomplete drawing or throw errors.
-Therefore, I listed some of formats as default plugin supported that I confirmed that is renders as expected.
+You can try with any known image formats that see through the plugin settings.
+However, the plugin not guarantee it is works.
 
 ### Default supported formats in plugin
 
@@ -60,7 +50,7 @@ Here the list below that registered as default supported formats in plugin.
 | XBM             |                                                                            |
 | XCF             | Gimp image. However, as I confirmed, it renders only single layer          |
 
-### Supported, but it can handle basically in obsidian
+### Excludes: These are basically handled in obsidian
 
 | Format | Note |
 | ------ | ---- |
@@ -69,7 +59,7 @@ Here the list below that registered as default supported formats in plugin.
 | WEBP   |      |
 | GIF    |      |
 
-### Broken
+### Seems Broken in ImageMagick
 
 These are listed on Image Magick library. But not works.
 
@@ -77,9 +67,29 @@ These are listed on Image Magick library. But not works.
 | ------ | ---------------------- |
 | TGA    | Truevision Targa image |
 
-## Dump: Listed in Image Magick library
+## Known problems and Tips
 
-As I dump a supported formats from a Image Magick library. You should remind that some of formats are may not work as you expected.
+### Link suggestion
+
+This problem(or just intended flow of an obsidian) has been found at least obsidian 0.15.0.
+You might have not shown link suggestion when you embed 3rd party images that are not default supported in obsidian.
+You can resolve it through turning on the 'Settings > File & Links > Detect all file extensions'.
+And another way, use a plugin such as [Boost Link Suggestions](https://github.com/jglev/obsidian-boost-link-suggestions).
+
+## Renders checklist
+
+The document of imagemagick, there are listed several formats (100+),
+but as I confirmed some of formats has been incomplete drawing or throw errors.
+Therefore, I listed some of formats as default plugin supported that I confirmed that is renders as expected.
+
+## Appendix
+
+### Dump: Listed in Image Magick library
+
+Here the list I dumped a supported formats from a Image Magick library.
+You have to remind that some of formats are may not work as you expected.
+
+Version: ImageMagick 7.1.1-23 Q8 x86_64 54b13e91d:20231210 https://imagemagick.org
 
 | Format          | Description                                                     | Note |
 | --------------- | --------------------------------------------------------------- | ---- |

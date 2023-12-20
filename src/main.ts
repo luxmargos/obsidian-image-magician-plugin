@@ -5,20 +5,20 @@ import {
 } from "obsidian";
 import * as psd from "./engines/psd/psd";
 import * as magick from "./engines/magick/magick";
-import { livePreviewExtension } from "./live_preview";
+import { livePreviewExtension } from "./editor_ext/live_preview";
 import { loadImageMagick } from "./engines/magick/magick_loader";
-import { ImageMagick, Magick, MagickFormat } from "@imagemagick/magick-wasm";
 import { PIE } from "./engines/imgEngines";
 import {
 	DEFAULT_SETTINGS,
-	EMBED_PSD_MD_EXT,
-	EXT_ALL,
 	ImgMagicianPluginSettings,
-} from "./settings";
+	SettingsUtil,
+} from "./settings/settings";
 import { MainPlugin, MainPluginContext } from "./context";
-import { PsdSupportSettingTab } from "./settings_tab";
+import { ImgkPluginSettingTab } from "./settings/settings_tab";
 import { VaultHandler } from "./valut";
-import { PsdFileView, VIEW_TYPE_PSD } from "./view";
+import { ImgkPluginFileView, VIEW_TYPE_IMGK_PLUGIN } from "./view";
+import { getMarkdownPostProcessor } from "./editor_ext/post_processor";
+import { Magick } from "@imagemagick/magick-wasm";
 
 export default class ImgMagicianPlugin extends MainPlugin {
 	settings: ImgMagicianPluginSettings;
@@ -26,51 +26,44 @@ export default class ImgMagicianPlugin extends MainPlugin {
 	context: MainPluginContext;
 
 	private onSettingsUpdate() {}
-	async onload() {
-		// initialize magick engine
-		try {
-			await loadImageMagick();
 
-			// let listStr: string = "";
-			// for (const fm of Magick.supportedFormats) {
-			// 	if (fm.supportsReading) {
-			// 		listStr += `|${fm.format}|${fm.description}||\n`;
-			// 	}
-			// }
-			// console.log(listStr);
-			PIE._magick = new magick.PluginMagickEngine();
-		} catch (e) {
-			console.log(e);
+	async onload() {
+		if (!PIE._magick) {
+			// initialize magick engine
+			try {
+				await loadImageMagick();
+
+				console.log(Magick.imageMagickVersion);
+
+				// let listStr: string = "";
+				// for (const fm of Magick.supportedFormats) {
+				// 	if (fm.supportsReading) {
+				// 		listStr += `|${fm.format}|${fm.description}||\n`;
+				// 	}
+				// }
+				// console.log(listStr);
+				PIE._magick = new magick.PluginMagickEngine();
+			} catch (e) {
+				console.log(e);
+			}
 		}
-		//initilize psd engine
-		PIE._psd = new psd.PluginPsdEngine();
+
+		if (!PIE._psd) {
+			//initilize psd engine
+			PIE._psd = new psd.PluginPsdEngine();
+		}
 
 		await this.loadSettings();
 
 		this.context = { plugin: this };
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(
-			new PsdSupportSettingTab(this.app, this, this.onSettingsUpdate)
+			new ImgkPluginSettingTab(this.context, () => {
+				this.onSettingsUpdate();
+			})
 		);
 
-		const PsdFileViewCreator: ViewCreator = (leaf: WorkspaceLeaf) => {
-			return new PsdFileView(this.context, leaf);
-		};
-
-		// register psd view
-		this.registerView(VIEW_TYPE_PSD, PsdFileViewCreator);
-
-		// register one by one to avoid exception
-		for (const ext of EXT_ALL) {
-			try {
-				this.registerExtensions([ext], VIEW_TYPE_PSD);
-			} catch (e) {
-				console.log("error : ", e);
-			}
-		}
-
-		// register embed markdown
-		this.registerExtensions([EMBED_PSD_MD_EXT], "markdown");
+		this.registerPluginExtensions();
 
 		// Using the onLayoutReady event will help to avoid massive vault.on('create') event on startup.
 		this.app.workspace.onLayoutReady(() => {
@@ -78,16 +71,58 @@ export default class ImgMagicianPlugin extends MainPlugin {
 			this.vaultHandler = new VaultHandler(this.context);
 			this.vaultHandler.fullScan();
 		});
+
+		if (this.settings.viewTreatVerticalOverflow) {
+			this.app.workspace.containerEl.classList.add(
+				"imgk-plugin-treat-vertical-overflow"
+			);
+		}
+	}
+
+	private registerPluginExtensions() {
+		const ImgkPluginViewCreator: ViewCreator = (leaf: WorkspaceLeaf) => {
+			return new ImgkPluginFileView(this.context, leaf);
+		};
+
+		// register psd view
+		this.registerView(VIEW_TYPE_IMGK_PLUGIN, ImgkPluginViewCreator);
+		this.registerExtensions(
+			this.settings.supportedFormats,
+			VIEW_TYPE_IMGK_PLUGIN
+		);
+
+		// register one by one to avoid exception
+		// for (const ext of this.settings.supportedFormats) {
+		// 	try {
+		// 		this.registerExtensions([ext], VIEW_TYPE_IMGK_PLUGIN);
+		// 	} catch (e) {
+		// 		console.log("error : ", e);
+		// 	}
+		// }
+	}
+	private clearPluginMods() {
+		this.app.workspace.containerEl.classList.remove(
+			"imgk-plugin-treat-vertical-overflow"
+		);
 	}
 
 	private handleOnLayoutReady() {
-		this.setupHoverLink();
+		// this.setupHoverLink();
 		this.setupMarkdownPostProcessor();
 		this.setupLivePreview();
 	}
 
+	/**
+	 * Handle live preview in live edit mode
+	 */
+	setupLivePreview() {
+		this.registerEditorExtension([livePreviewExtension(this.context)]);
+	}
+
 	setupMarkdownPostProcessor() {
-		this.registerMarkdownPostProcessor(markdownPostProcessor(this.context));
+		this.registerMarkdownPostProcessor(
+			getMarkdownPostProcessor(this.context)
+		);
 	}
 
 	setupHoverLink() {
@@ -108,21 +143,20 @@ export default class ImgMagicianPlugin extends MainPlugin {
 
 			//I think this is alternative for hover-link event, but don't know how to use it.
 			// this.registerHoverLinkSource()
-			this.registerHoverLinkSource(VIEW_TYPE_PSD, {
-				defaultMod: false,
-				display: VIEW_TYPE_PSD,
-			});
+			// this.registerHoverLinkSource(VIEW_TYPE_PSD, {
+			// 	defaultMod: false,
+			// 	display: VIEW_TYPE_PSD,
+			// });
 		} catch (err) {}
 	}
 
-	/**
-	 * Handle live preview in live edit mode
-	 */
-	setupLivePreview() {
-		this.registerEditorExtension(livePreviewExtension(this.context));
+	onunload() {
+		this.clearPluginMods();
 	}
 
-	onunload() {}
+	getSettings(): ImgMagicianPluginSettings {
+		return this.settings;
+	}
 
 	async loadSettings() {
 		this.settings = Object.assign(
@@ -130,20 +164,16 @@ export default class ImgMagicianPlugin extends MainPlugin {
 			DEFAULT_SETTINGS,
 			await this.loadData()
 		);
+		this.settingsUtil = new SettingsUtil(() => this.getSettings());
+
+		// console.log(
+		// 	"loadSettings : ",
+		// 	this.settings,
+		// 	this.settingsUtil.getSupportedFormats()
+		// );
 	}
 
 	async saveSettings() {
 		await this.saveData(this.settings);
 	}
 }
-
-const markdownPostProcessor = (_context: MainPluginContext) => {
-	return async (el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
-		console.log("markdownPostProcessor", "el : ", el, "ctx:", ctx);
-		//check to see if we are rendering in editing mode or live preview
-		//if yes, then there should be no .internal-embed containers
-		const embeddedItems = el.querySelectorAll(".internal-embed");
-
-		// console.log(el);
-	};
-};

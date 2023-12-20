@@ -6,3 +6,54 @@ available in the app when your plugin is enabled.
 If your plugin does not need CSS, delete this file.
 
 */
+
+canvas.imgk-plugin-item:not([width]) {
+	max-width: 100%;
+}
+
+img.imgk-plugin-item:not([width]) {
+	max-width: 100%;
+}
+
+/* Treat vertical overflow */
+.workspace.imgk-plugin-treat-vertical-overflow
+	.workspace-leaf-content
+	.view-content
+	.image-container
+	img:not([height]) {
+	max-height: 100%;
+}
+
+.workspace.imgk-plugin-treat-vertical-overflow
+	.workspace-leaf-content
+	.view-content
+	.image-container:has(img:not([height])) {
+	height: 100%;
+}
+
+.workspace-leaf-content
+	.internal-embed
+	img.imgk-plugin-fit-max-height:not([height]) {
+	max-height: 100%;
+}
+
+.internal-embed:has(.imgk-plugin-overlay) {
+	padding: 0px;
+}
+
+/* An follower for <img>. Tweaks drag and drop with overriding "src" attribute of target <img>  */
+/* .internal-embed .imgk-plugin-overlay { */
+.imgk-plugin-overlay {
+	/* position: fixed; */
+	position: absolute;
+	display: block;
+	left: 0;
+	top: 0;
+	cursor: pointer;
+
+	/* background-color: red;
+	opacity: 0.8; */
+
+	/* right: 0; */
+	/* bottom: 0; */
+}

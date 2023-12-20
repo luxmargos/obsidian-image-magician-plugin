@@ -1,22 +1,48 @@
 import Psd from "@webtoon/psd";
 import { asTFile, asTFileOrThrow, findValutFile } from "../../vault_util";
-import { FileFormat, getExportFilePath, isImageFormat } from "../../exporter";
-import { TAbstractFile, TFile } from "obsidian";
-import { PluginImageEngine, exportCanvasWithBlob } from "../imgEngine";
-import { PluginContext } from "src/context";
+import { ExportFormat, getExportFilePath } from "../../exporter";
+import { TFile } from "obsidian";
+import {
+	PluginImageEngine,
+	exportCanvasWithBlob,
+	resolveExportData,
+} from "../imgEngine";
+import { MainPluginContext } from "../../context";
 
 export class PluginPsdEngine implements PluginImageEngine {
 	draw(
-		context: PluginContext,
-		imgFile: TAbstractFile,
+		context: MainPluginContext,
+		imgFile: TFile,
 		el: HTMLElement
 	): Promise<HTMLCanvasElement> {
-		return new Promise<HTMLCanvasElement>(async (resolve, reject) => {
-			const canvasElement: HTMLCanvasElement =
-				document.createElement("canvas");
+		return new Promise(async (resolve, reject) => {
+			let cv: HTMLCanvasElement | null = el.querySelector(
+				"canvas.imgk-plugin-item"
+			);
+			if (!cv) {
+				cv = el.createEl("canvas", { cls: "imgk-plugin-item" });
+				console.log("create canvas element");
+			} else {
+				console.log("reuse canvas element");
+			}
+
+			try {
+				await this.drawOnCanvas(context, imgFile, cv);
+				resolve(cv);
+			} catch (e) {
+				reject(e);
+			}
+		});
+	}
+
+	drawOnCanvas(
+		context: MainPluginContext,
+		imgFile: TFile,
+		cv: HTMLCanvasElement
+	): Promise<void> {
+		return new Promise(async (resolve, reject) => {
 			const canvasContext: CanvasRenderingContext2D | null =
-				canvasElement.getContext("2d");
-			el.append(canvasElement);
+				cv.getContext("2d");
 
 			if (!canvasContext) {
 				reject(new Error(`Context error`));
@@ -41,11 +67,10 @@ export class PluginPsdEngine implements PluginImageEngine {
 					parsedPsd.height
 				);
 
-				canvasElement.width = parsedPsd.width;
-				canvasElement.height = parsedPsd.height;
+				// canvasElement.width = parsedPsd.width;
+				// canvasElement.height = parsedPsd.height;
 				canvasContext.putImageData(imageData, 0, 0);
-
-				resolve(canvasElement);
+				resolve();
 			} catch (err) {
 				reject(err);
 			}
@@ -53,57 +78,37 @@ export class PluginPsdEngine implements PluginImageEngine {
 	}
 
 	export(
-		context: PluginContext,
-		sourceFile: TAbstractFile,
-		exportFormat: FileFormat,
+		context: MainPluginContext,
+		sourceFile: TFile,
+		exportFormat: ExportFormat,
 		refElement: HTMLElement
 	): Promise<void> {
 		return new Promise<void>(async (resolve, reject) => {
-			let sourceTFile: TFile | undefined;
-
-			try {
-				sourceTFile = asTFileOrThrow(context, sourceFile);
-			} catch (e) {
-				reject(e);
-				return;
-			}
-
-			const exportPath: string = getExportFilePath(
+			const exportData = resolveExportData(
 				context,
-				sourceTFile,
+				sourceFile,
 				exportFormat
 			);
-			const exportFile: TFile | undefined = findValutFile(
-				context,
-				exportPath
-			);
 
-			const exportImge: boolean =
-				!exportFile || sourceTFile.stat.mtime > exportFile.stat.mtime;
-
-			if (!exportImge) {
+			if (exportData.isLatest) {
 				resolve();
 				return;
 			}
 
-			// 0-1
-			const quality: number = 1;
-
-			const canvasElement: HTMLCanvasElement = await this.draw(
-				context,
-				sourceFile,
-				refElement
-			);
-
 			try {
+				const canvasElement: HTMLCanvasElement = await this.draw(
+					context,
+					sourceFile,
+					refElement
+				);
+
 				await exportCanvasWithBlob(
 					context,
 					canvasElement,
 					exportFormat,
-					1,
 					true,
-					exportPath,
-					exportFile
+					exportData.path,
+					exportData.file
 				);
 				resolve();
 			} catch (e) {

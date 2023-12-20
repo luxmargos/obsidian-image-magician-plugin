@@ -1,5 +1,5 @@
 import { App, Plugin, PluginManifest } from "obsidian";
-import { ImgMagicianPluginSettings, SettingsUtil } from "./settings";
+import { ImgMagicianPluginSettings, SettingsUtil } from "./settings/settings";
 
 export type PluginContext = {
 	plugin: Plugin;
@@ -15,7 +15,6 @@ export class MainPlugin extends Plugin {
 
 	constructor(app: App, manifest: PluginManifest) {
 		super(app, manifest);
-		this.settingsUtil = new SettingsUtil();
 	}
 }
 

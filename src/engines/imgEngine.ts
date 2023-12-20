@@ -1,18 +1,25 @@
-import { TAbstractFile, TFile } from "obsidian";
-import { FileFormat } from "../exporter";
-import { PluginContext } from "../context";
+import { TFile } from "obsidian";
+import { ExportFormat, getExportFilePath } from "../exporter";
+import { MainPluginContext, PluginContext } from "../context";
+import { findValutFile } from "../vault_util";
 
 export interface PluginImageEngine {
 	draw(
-		context: PluginContext,
-		imgFile: TAbstractFile,
+		context: MainPluginContext,
+		imgFile: TFile,
 		el: HTMLElement
 	): Promise<HTMLCanvasElement>;
 
+	drawOnCanvas(
+		context: MainPluginContext,
+		imgFile: TFile,
+		el: HTMLCanvasElement
+	): Promise<void>;
+
 	export(
-		context: PluginContext,
-		psdFile: TAbstractFile,
-		exportFormat: FileFormat,
+		context: MainPluginContext,
+		psdFile: TFile,
+		exportFormat: ExportFormat,
 		refElement: HTMLElement
 	): Promise<void>;
 }
@@ -29,10 +36,9 @@ export interface PluginImageEngine {
  * @returns
  */
 export const exportCanvasWithBlob = async (
-	context: PluginContext,
+	context: MainPluginContext,
 	canvasElement: HTMLCanvasElement,
-	exportFormat: FileFormat,
-	quality: number,
+	exportFormat: ExportFormat,
 	removeCanvas: boolean,
 	filePath: string,
 	file?: TFile
@@ -50,24 +56,18 @@ export const exportCanvasWithBlob = async (
 						const ab = await blob.arrayBuffer();
 
 						if (!file) {
-							console.log(
-								"context.plugin.app.vault.createBinary"
-							);
+							// create new one
 							const tf =
 								await context.plugin.app.vault.createBinary(
 									filePath,
 									ab
 								);
-							console.log("png created : ", tf);
 						} else {
-							console.log(
-								"context.plugin.app.vault.modifyBinary"
-							);
+							// modify exist
 							await context.plugin.app.vault.modifyBinary(
 								file,
 								ab
 							);
-							console.log("png modified : ", file);
 						}
 
 						jobComplete();
@@ -78,11 +78,37 @@ export const exportCanvasWithBlob = async (
 					}
 				},
 				exportFormat.mimeType,
-				quality
+				exportFormat.quality
 			);
 		} catch (e) {
 			jobComplete();
 			reject(e);
 		}
 	});
+};
+
+export type ExportData = {
+	path: string;
+	file?: TFile;
+	isLatest: boolean;
+};
+
+export const resolveExportData = (
+	context: MainPluginContext,
+	source: TFile,
+	exportFormat: ExportFormat
+): ExportData => {
+	const exportPath: string = getExportFilePath(context, source, exportFormat);
+	const exportFile: TFile | undefined = findValutFile(context, exportPath);
+
+	const isLatest: boolean =
+		exportFile !== undefined &&
+		exportFile != null &&
+		exportFile.stat.mtime >= source.stat.mtime;
+
+	return {
+		path: exportPath,
+		file: exportFile,
+		isLatest: isLatest,
+	};
 };

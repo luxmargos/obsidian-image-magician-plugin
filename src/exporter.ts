@@ -3,16 +3,46 @@ import * as pb from "path-browserify";
 import { findValutFile } from "./vault_util";
 import { PluginContext } from "./context";
 
-export type FileFormat = {
+export type ExportFormat = {
 	mimeType: string;
 	ext: string;
 	optAvoidStringFormat?: boolean;
+	quality: number;
+
+	scaleX?: number;
+	scaleY?: number;
+	fixedWidth?: number;
+	fixedHeight?: number;
+	maxWidth?: number;
+	maxHeight?: number;
+	minWidth?: number;
+	minHeight?: number;
 };
 
-export const isImageFormat = (exportFileFormat: FileFormat): boolean => {
-	console.log("isImageFormat : ", exportFileFormat);
+export const exportFormatMap: Record<string, ExportFormat> = {
+	png: {
+		mimeType: "image/png",
+		ext: "png",
+		quality: 1,
+	},
+
+	jpg: {
+		mimeType: "image/jpg",
+		ext: "jpg",
+		quality: 1,
+	},
+};
+
+export const exportFormatList: ExportFormat[] = [
+	exportFormatMap.png,
+	exportFormatMap.jpg,
+];
+
+export const isImageExportFormat = (
+	exportFileFormat: ExportFormat
+): boolean => {
 	return (
-		imageFormatList.findIndex((item: FileFormat) => {
+		exportFormatList.findIndex((item: ExportFormat) => {
 			return (
 				item.ext.toLowerCase() === exportFileFormat.ext.toLowerCase()
 			);
@@ -20,26 +50,9 @@ export const isImageFormat = (exportFileFormat: FileFormat): boolean => {
 	);
 };
 
-export const imageFormatMap = {
-	png: {
-		mimeType: "image/png",
-		ext: "png",
-	},
-
-	jpg: {
-		mimeType: "image/jpg",
-		ext: "jpg",
-	},
-};
-
-export const imageFormatList: FileFormat[] = [
-	imageFormatMap.png,
-	imageFormatMap.jpg,
-];
-
 export const getExportSuffix = (
 	context: PluginContext,
-	exportFormat: FileFormat
+	exportFormat: ExportFormat
 ): string => {
 	if (exportFormat.optAvoidStringFormat) {
 		return `.${exportFormat.ext}`;
@@ -51,7 +64,7 @@ export const getExportSuffix = (
 export const getExportFileName = (
 	context: PluginContext,
 	file: TFile,
-	exportFormat: FileFormat
+	exportFormat: ExportFormat
 ): string => {
 	return buildExportFileName(context, file.path, exportFormat);
 };
@@ -59,7 +72,7 @@ export const getExportFileName = (
 export const getExportFilePath = (
 	context: PluginContext,
 	file: TFile,
-	exportFormat: FileFormat
+	exportFormat: ExportFormat
 ): string => {
 	return buildExportFilePath(context, file.path, exportFormat);
 };
@@ -67,7 +80,7 @@ export const getExportFilePath = (
 export const buildExportFileName = (
 	context: PluginContext,
 	targetPath: string,
-	exportFormat: FileFormat
+	exportFormat: ExportFormat
 ): string => {
 	return `${pb.basename(targetPath)}${getExportSuffix(
 		context,
@@ -78,15 +91,23 @@ export const buildExportFileName = (
 export const buildExportFilePath = (
 	context: PluginContext,
 	targetPath: string,
-	exportFormat: FileFormat
+	exportFormat: ExportFormat
 ): string => {
 	return `${targetPath}${getExportSuffix(context, exportFormat)}`;
 };
 
+/**
+ * @deprecated
+ *
+ * @param context
+ * @param targetFile
+ * @param exportFormat
+ * @param propName
+ */
 export const embedMarkDownCreator = async (
 	context: PluginContext,
 	targetFile: TFile,
-	exportFormat: FileFormat,
+	exportFormat: ExportFormat,
 	propName: string
 ) => {
 	const mdPath = getExportFilePath(context, targetFile, exportFormat);
