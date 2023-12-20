@@ -4,6 +4,7 @@ import { findValutFile } from "./vault_util";
 import { PluginContext } from "./context";
 
 export type ExportFormat = {
+	display?: string;
 	mimeType: string;
 	ext: string;
 	optAvoidStringFormat?: boolean;
@@ -21,14 +22,23 @@ export type ExportFormat = {
 
 export const exportFormatMap: Record<string, ExportFormat> = {
 	png: {
+		display: "PNG",
 		mimeType: "image/png",
 		ext: "png",
 		quality: 1,
 	},
 
 	jpg: {
-		mimeType: "image/jpg",
+		display: "JPEG",
+		mimeType: "image/jpeg",
 		ext: "jpg",
+		quality: 1,
+	},
+
+	webp: {
+		display: "WEBP",
+		mimeType: "image/webp",
+		ext: "webp",
 		quality: 1,
 	},
 };
@@ -36,6 +46,7 @@ export const exportFormatMap: Record<string, ExportFormat> = {
 export const exportFormatList: ExportFormat[] = [
 	exportFormatMap.png,
 	exportFormatMap.jpg,
+	exportFormatMap.webp,
 ];
 
 export const isImageExportFormat = (

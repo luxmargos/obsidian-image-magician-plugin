@@ -43,6 +43,7 @@ export const DEFAULT_SETTINGS: ImgMagicianPluginSettings = {
 		"ppm",
 		"sgi",
 		"xbm",
+		"avif",
 		// MagickFormat.Tga.toLowerCase(),
 	],
 
