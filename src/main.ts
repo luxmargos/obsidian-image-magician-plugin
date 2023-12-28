@@ -1,7 +1,9 @@
 import {
 	MarkdownPostProcessorContext,
+	Modal,
 	ViewCreator,
 	WorkspaceLeaf,
+	normalizePath,
 } from "obsidian";
 import * as psd from "./engines/psd/psd";
 import * as magick from "./engines/magick/magick";
@@ -10,22 +12,73 @@ import { loadImageMagick } from "./engines/magick/magick_loader";
 import { PIE } from "./engines/imgEngines";
 import {
 	DEFAULT_SETTINGS,
-	ImgMagicianPluginSettings,
+	ImgkPluginSettings,
 	SettingsUtil,
 } from "./settings/settings";
 import { MainPlugin, MainPluginContext } from "./context";
 import { ImgkPluginSettingTab } from "./settings/settings_tab";
-import { VaultHandler } from "./valut";
+import { VaultHandler } from "./valut_handler";
 import { ImgkPluginFileView, VIEW_TYPE_IMGK_PLUGIN } from "./view";
 import { getMarkdownPostProcessor } from "./editor_ext/post_processor";
 import { Magick } from "@imagemagick/magick-wasm";
+import { ImgkPluginSettingsDialog } from "./dialogs/plugin_settings_dialog";
+import { PluginName } from "./consts/main";
 
 export default class ImgMagicianPlugin extends MainPlugin {
-	settings: ImgMagicianPluginSettings;
+	settings: ImgkPluginSettings;
 	vaultHandler: VaultHandler;
 	context: MainPluginContext;
 
-	private onSettingsUpdate() {}
+	private onSettingsUpdate(newSettings: ImgkPluginSettings) {
+		return new Promise<void>(async (resolve, reject) => {
+			try {
+				await this.saveSettings(newSettings);
+				await this.cleanup();
+				await this.postInit();
+				this.vaultHandler.fullScan();
+
+				resolve();
+			} catch (err) {
+				reject(err);
+			}
+		});
+	}
+
+	private postInit() {
+		return new Promise<void>(async (resolve, reject) => {
+			try {
+				this.registerPluginExtensions();
+
+				if (this.settings.viewTreatVerticalOverflow) {
+					this.app.workspace.containerEl.classList.add(
+						"imgk-plugin-treat-vertical-overflow"
+					);
+				}
+
+				this.vaultHandler?.updateSettings();
+				this.vaultHandler?.resume();
+
+				resolve();
+			} catch (err) {
+				reject(err);
+			}
+		});
+	}
+
+	private cleanup() {
+		return new Promise<void>(async (resolve, reject) => {
+			try {
+				this.vaultHandler.stop();
+				this.app.workspace.containerEl.classList.remove(
+					"imgk-plugin-treat-vertical-overflow"
+				);
+
+				resolve();
+			} catch (err) {
+				reject(err);
+			}
+		});
+	}
 
 	async onload() {
 		if (!PIE._magick) {
@@ -52,57 +105,109 @@ export default class ImgMagicianPlugin extends MainPlugin {
 			//initilize psd engine
 			PIE._psd = new psd.PluginPsdEngine();
 		}
-
-		await this.loadSettings();
-
 		this.context = { plugin: this };
+
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(
-			new ImgkPluginSettingTab(this.context, () => {
-				this.onSettingsUpdate();
+			new ImgkPluginSettingTab(this.context, (newSettings) => {
+				this.onSettingsUpdate(newSettings);
 			})
 		);
 
-		this.registerPluginExtensions();
+		await this.loadSettings();
 
-		// Using the onLayoutReady event will help to avoid massive vault.on('create') event on startup.
-		this.app.workspace.onLayoutReady(() => {
-			this.handleOnLayoutReady();
-			this.vaultHandler = new VaultHandler(this.context);
-			this.vaultHandler.fullScan();
-		});
-
-		if (this.settings.viewTreatVerticalOverflow) {
-			this.app.workspace.containerEl.classList.add(
-				"imgk-plugin-treat-vertical-overflow"
-			);
-		}
-	}
-
-	private registerPluginExtensions() {
 		const ImgkPluginViewCreator: ViewCreator = (leaf: WorkspaceLeaf) => {
 			return new ImgkPluginFileView(this.context, leaf);
 		};
 
-		// register psd view
+		// register imgk view
 		this.registerView(VIEW_TYPE_IMGK_PLUGIN, ImgkPluginViewCreator);
-		this.registerExtensions(
-			this.settings.supportedFormats,
-			VIEW_TYPE_IMGK_PLUGIN
-		);
 
-		// register one by one to avoid exception
-		// for (const ext of this.settings.supportedFormats) {
-		// 	try {
-		// 		this.registerExtensions([ext], VIEW_TYPE_IMGK_PLUGIN);
-		// 	} catch (e) {
-		// 		console.log("error : ", e);
-		// 	}
-		// }
+		// Using the onLayoutReady event will help to avoid massive vault.on('create') event on startup.
+		this.app.workspace.onLayoutReady(() => {
+			this.vaultHandler = new VaultHandler(this.context);
+			this.vaultHandler.fullScan();
+		});
+
+		await this.postInit();
+
+		this.app.workspace.onLayoutReady(() => {
+			this.handleOnLayoutReady();
+		});
+
+		new ImgkPluginSettingsDialog(this.context, (newSettings) => {
+			this.onSettingsUpdate(newSettings);
+		}).open();
 	}
-	private clearPluginMods() {
-		this.app.workspace.containerEl.classList.remove(
-			"imgk-plugin-treat-vertical-overflow"
+
+	private failedExts: string[] = [];
+	private passedExts: string[] = [];
+
+	private registerPluginExtensions() {
+		const extsLowerCase = [
+			...this.settings.supportedFormats.map((value) =>
+				value.toLowerCase()
+			),
+		]
+			.filter(
+				(item, itemIndex, selfArr) =>
+					selfArr.indexOf(item) === itemIndex
+			)
+			.filter((item, itemIndex, selfArr) => {
+				// skip already attempted extensions
+				return (
+					!this.passedExts.includes(item) &&
+					!this.failedExts.includes(item)
+				);
+			});
+
+		const newPassedExts: string[] = [];
+		const newFailedExts: string[] = [];
+		// register one by one to avoid exception
+		for (const ext of extsLowerCase) {
+			try {
+				this.registerExtensions([ext], VIEW_TYPE_IMGK_PLUGIN);
+				newPassedExts.push(ext);
+			} catch (e) {
+				newFailedExts.push(ext);
+			}
+		}
+
+		const extsUpperCase: string[] = [];
+		// register as upper case too
+		for (const ext of newPassedExts) {
+			try {
+				const upperCasedExt = ext.toUpperCase();
+				this.registerExtensions([upperCasedExt], VIEW_TYPE_IMGK_PLUGIN);
+
+				extsUpperCase.push(upperCasedExt);
+			} catch (e) {}
+		}
+
+		this.passedExts.push(...newPassedExts);
+		this.passedExts.push(...extsUpperCase);
+		this.failedExts.push(...newFailedExts);
+
+		this.settingsUtil.setRuntimeSupportedFormats(this.passedExts);
+
+		if (newFailedExts.length > 0) {
+			const errorDialog = new Modal(this.app);
+			errorDialog.titleEl.setText(
+				`${PluginName}: Warning on plugin startup`
+			);
+			errorDialog.contentEl.setText(
+				`Some file extensions, such as "[${newFailedExts.join(
+					", "
+				)}]" have failed to register in the obsidian app. The plugin will not support viewing them. Consider changing the ${PluginName} plugin settings.`
+			);
+			errorDialog.open();
+		}
+
+		console.log(
+			this.passedExts,
+			newPassedExts,
+			this.failedExts,
+			newFailedExts
 		);
 	}
 
@@ -151,11 +256,9 @@ export default class ImgMagicianPlugin extends MainPlugin {
 	}
 
 	onunload() {
-		this.clearPluginMods();
-	}
-
-	getSettings(): ImgMagicianPluginSettings {
-		return this.settings;
+		this.cleanup()
+			.then(() => {})
+			.catch((err) => {});
 	}
 
 	async loadSettings() {
@@ -164,7 +267,7 @@ export default class ImgMagicianPlugin extends MainPlugin {
 			DEFAULT_SETTINGS,
 			await this.loadData()
 		);
-		this.settingsUtil = new SettingsUtil(() => this.getSettings());
+		this.settingsUtil = new SettingsUtil(this.settings);
 
 		// console.log(
 		// 	"loadSettings : ",
@@ -173,7 +276,9 @@ export default class ImgMagicianPlugin extends MainPlugin {
 		// );
 	}
 
-	async saveSettings() {
-		await this.saveData(this.settings);
+	async saveSettings(newSettings: ImgkPluginSettings) {
+		this.settings = newSettings;
+		this.settingsUtil = new SettingsUtil(this.settings);
+		await this.saveData(newSettings);
 	}
 }

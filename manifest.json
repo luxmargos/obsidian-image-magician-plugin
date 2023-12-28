@@ -1,10 +1,10 @@
 {
-	"id": "psd-support-plugin",
-	"name": "PSD Support Plugin",
+	"id": "image-magician-plugin",
+	"name": "Image Magician Plugin",
 	"version": "0.1.0",
 	"minAppVersion": "0.15.0",
-	"description": "An obsidian.md plugin. Supports preview and export of photoshop psd file",
+	"description": "An obsidian.md plugin. Supports view and export of several image formats.",
 	"author": "luxmargos",
-	"authorUrl": "https://github.com/luxmargos/obsidian-psd-support-plugin",
+	"authorUrl": "https://github.com/luxmargos/obsidian-image-magician-plugin",
 	"isDesktopOnly": false
 }

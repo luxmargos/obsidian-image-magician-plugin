@@ -1,19 +1,26 @@
 import Psd from "@webtoon/psd";
 import { asTFile, asTFileOrThrow, findValutFile } from "../../vault_util";
-import { ExportFormat, getExportFilePath } from "../../exporter";
 import { TFile } from "obsidian";
 import {
 	PluginImageEngine,
 	exportCanvasWithBlob,
-	resolveExportData,
+	resolveExportDstInfo,
 } from "../imgEngine";
 import { MainPluginContext } from "../../context";
+import { ImgkExportSettings, ImgkSize } from "../../settings/settings";
+import {
+	ImageAdj,
+	ImageAdjFunc,
+	ImgkRuntimeExportSettings,
+} from "../../settings/settings_as_func";
+import { parse } from "path";
 
 export class PluginPsdEngine implements PluginImageEngine {
 	draw(
 		context: MainPluginContext,
 		imgFile: TFile,
-		el: HTMLElement
+		el: HTMLElement,
+		imageAdjFunc?: ImageAdjFunc
 	): Promise<HTMLCanvasElement> {
 		return new Promise(async (resolve, reject) => {
 			let cv: HTMLCanvasElement | null = el.querySelector(
@@ -27,9 +34,10 @@ export class PluginPsdEngine implements PluginImageEngine {
 			}
 
 			try {
-				await this.drawOnCanvas(context, imgFile, cv);
+				await this.drawOnCanvas(context, imgFile, cv, imageAdjFunc);
 				resolve(cv);
 			} catch (e) {
+				cv.remove();
 				reject(e);
 			}
 		});
@@ -38,7 +46,8 @@ export class PluginPsdEngine implements PluginImageEngine {
 	drawOnCanvas(
 		context: MainPluginContext,
 		imgFile: TFile,
-		cv: HTMLCanvasElement
+		cv: HTMLCanvasElement,
+		imageAdjFunc?: ImageAdjFunc
 	): Promise<void> {
 		return new Promise(async (resolve, reject) => {
 			const canvasContext: CanvasRenderingContext2D | null =
@@ -60,16 +69,33 @@ export class PluginPsdEngine implements PluginImageEngine {
 					await context.plugin.app.vault.readBinary(psdTFile);
 				const parsedPsd = Psd.parse(buff);
 
+				let imgAdj: ImageAdj = {
+					width: parsedPsd.width,
+					height: parsedPsd.height,
+					scaleX: 1,
+					scaleY: 1,
+				};
+
+				if (imageAdjFunc) {
+					const imgSize: ImgkSize = {
+						x: parsedPsd.width,
+						y: parsedPsd.height,
+					};
+					imgAdj = imageAdjFunc(imgSize);
+				}
+
 				const compositeBuffer = await parsedPsd.composite();
 				const imageData = new ImageData(
 					compositeBuffer,
-					parsedPsd.width,
-					parsedPsd.height
+					imgAdj.width,
+					imgAdj.height
 				);
 
 				// canvasElement.width = parsedPsd.width;
 				// canvasElement.height = parsedPsd.height;
 				canvasContext.putImageData(imageData, 0, 0);
+				canvasContext.scale(imgAdj.scaleX, imgAdj.scaleY);
+
 				resolve();
 			} catch (err) {
 				reject(err);
@@ -80,23 +106,24 @@ export class PluginPsdEngine implements PluginImageEngine {
 	export(
 		context: MainPluginContext,
 		sourceFile: TFile,
-		exportFormat: ExportFormat,
+		settings: ImgkRuntimeExportSettings,
 		refElement: HTMLElement
 	): Promise<void> {
 		return new Promise<void>(async (resolve, reject) => {
-			const exportData = resolveExportData(
+			const exportDstInfo = resolveExportDstInfo(
 				context,
 				sourceFile,
-				exportFormat
+				settings.data
 			);
 
-			if (exportData.isLatest) {
+			if (exportDstInfo.isLatest) {
 				resolve();
 				return;
 			}
 
+			let canvasElement: HTMLCanvasElement | undefined;
 			try {
-				const canvasElement: HTMLCanvasElement = await this.draw(
+				canvasElement = await this.draw(
 					context,
 					sourceFile,
 					refElement
@@ -105,13 +132,15 @@ export class PluginPsdEngine implements PluginImageEngine {
 				await exportCanvasWithBlob(
 					context,
 					canvasElement,
-					exportFormat,
-					true,
-					exportData.path,
-					exportData.file
+					settings.data.format,
+					settings.data.imgProps.quality,
+					exportDstInfo.path,
+					exportDstInfo.file
 				);
+				canvasElement.remove();
 				resolve();
 			} catch (e) {
+				canvasElement?.remove();
 				reject(e);
 			}
 		});

@@ -1,9 +1,22 @@
-import { FileView, TFile, WorkspaceLeaf } from "obsidian";
+import {
+	ButtonComponent,
+	EditableFileView,
+	FileView,
+	Modal,
+	Setting,
+	TFile,
+	WorkspaceLeaf,
+} from "obsidian";
 import { MainPluginContext } from "./context";
 import { PIE } from "./engines/imgEngines";
+import { PluginFullName } from "./consts/main";
+import { createErrorEl } from "./errors";
+import { ImgkPluginSettingTab } from "./settings/settings_tab";
+import { exportFormatMap } from "./exporter";
+import { ImgkPluginExportDialog } from "./dialogs/export_opt_dialog";
 
 export const VIEW_TYPE_IMGK_PLUGIN = "imgk-plugin-view";
-export class ImgkPluginFileView extends FileView {
+export class ImgkPluginFileView extends EditableFileView {
 	context: MainPluginContext;
 
 	constructor(context: MainPluginContext, leaf: WorkspaceLeaf) {
@@ -11,24 +24,40 @@ export class ImgkPluginFileView extends FileView {
 		this.context = context;
 		this.allowNoFile = false;
 		this.navigation = true;
+
+		this.addAction("file-output", "Export", (evt) => {
+			if (!this.file) {
+				return;
+			}
+
+			const md = new ImgkPluginExportDialog(
+				context,
+				context.plugin.settingsUtil.getSettingsRef(),
+				context.plugin.settingsUtil.getIntantExport(),
+				this.file
+			);
+			md.open();
+		});
 	}
 
 	canAcceptExtension(extension: string): boolean {
 		return this.context.plugin.settingsUtil
-			.getSupportedFormats()
+			.getRuntimeSupportedFormats()
 			.contains(extension);
 	}
 
 	getViewType(): string {
 		return VIEW_TYPE_IMGK_PLUGIN;
+		// return "image";
 	}
 
 	getDisplayText(): string {
 		return this.file?.basename ?? "";
 	}
 
-	onload(): void {}
-
+	onload(): void {
+		console.log("on open");
+	}
 	onunload(): void {}
 
 	protected onOpen(): Promise<void> {
@@ -43,6 +72,7 @@ export class ImgkPluginFileView extends FileView {
 	}
 
 	onLoadFile(file: TFile): Promise<void> {
+		console.log("onLoadFile");
 		return new Promise(async (resolve, reject) => {
 			let canvas: HTMLCanvasElement | undefined;
 			try {
@@ -70,15 +100,30 @@ export class ImgkPluginFileView extends FileView {
 						imgElement.src = burl;
 					}
 				});
-
 				// imgElement.src = canvas.toDataURL();
 
 				canvas?.remove();
+				this.showUi(imgContainer);
 				resolve();
 			} catch (err) {
 				canvas?.remove();
+				createErrorEl(this.contentEl, file.path, err);
 				resolve();
 			}
 		});
+	}
+
+	showUi(contEl: HTMLElement) {
+		const settingMain = contEl.createDiv({
+			cls: "imgk-view-tools",
+		});
+		const setting = new Setting(settingMain).addButton(
+			(comp: ButtonComponent) => {
+				comp.setIcon("file-output");
+			}
+		);
+		setting.descEl.toggle(false);
+		setting.nameEl.toggle(false);
+		setting.settingEl.style.border = "none";
 	}
 }

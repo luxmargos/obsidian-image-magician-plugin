@@ -5,31 +5,35 @@ import { IMagickImage, ImageMagick } from "@imagemagick/magick-wasm";
 import {
 	PluginImageEngine,
 	exportCanvasWithBlob,
-	resolveExportData,
+	resolveExportDstInfo,
 } from "../imgEngine";
-import { MainPluginContext } from "src/context";
+import { MainPluginContext } from "../../context";
+import { ImgkExportSettings, ImgkSize } from "../../settings/settings";
+import {
+	ImageAdj,
+	ImageAdjFunc,
+	ImgkRuntimeExportSettings,
+} from "../../settings/settings_as_func";
+import { fileURLToPath } from "url";
 
 export class PluginMagickEngine implements PluginImageEngine {
 	draw(
 		context: MainPluginContext,
 		imgFile: TFile,
-		el: HTMLElement
+		el: HTMLElement,
+		imageAdjFunc?: ImageAdjFunc
 	): Promise<HTMLCanvasElement> {
 		return new Promise(async (resolve, reject) => {
-			let cv: HTMLCanvasElement | null = el.querySelector(
-				"canvas.imgk-plugin-item"
-			);
-			if (!cv) {
-				cv = el.createEl("canvas", { cls: "imgk-plugin-item" });
-				console.log("create canvas element");
-			} else {
-				console.log("reuse canvas element");
-			}
+			const cv: HTMLCanvasElement = el.createEl("canvas", {
+				cls: "imgk-plugin-item",
+			});
+			console.log("create canvas element");
 
 			try {
-				await this.drawOnCanvas(context, imgFile, cv);
+				await this.drawOnCanvas(context, imgFile, cv, imageAdjFunc);
 				resolve(cv);
 			} catch (e) {
+				cv.remove();
 				reject(e);
 			}
 		});
@@ -38,7 +42,8 @@ export class PluginMagickEngine implements PluginImageEngine {
 	drawOnCanvas(
 		context: MainPluginContext,
 		imgFile: TFile,
-		cv: HTMLCanvasElement
+		cv: HTMLCanvasElement,
+		imageAdjFunc?: ImageAdjFunc
 	): Promise<void> {
 		return new Promise<void>(async (resolve, reject) => {
 			const canvasContext: CanvasRenderingContext2D | null =
@@ -62,6 +67,28 @@ export class PluginMagickEngine implements PluginImageEngine {
 				await ImageMagick.read(byteArr, async (img: IMagickImage) => {
 					// canvasElement.width = img.width;
 					// canvasElement.height = img.height;
+
+					if (imageAdjFunc) {
+						const imgSize: ImgkSize = {
+							x: img.width,
+							y: img.height,
+						};
+						const imgAdj: ImageAdj = imageAdjFunc(imgSize);
+						if (imgAdj.scaleX < 0) {
+							img.flop();
+						}
+						if (imgAdj.scaleY < 0) {
+							img.flip();
+						}
+
+						if (
+							imgAdj.width !== img.width ||
+							imgAdj.height !== img.height
+						) {
+							img.resize(imgAdj.width, imgAdj.height);
+						}
+					}
+
 					img.writeToCanvas(cv);
 				});
 
@@ -75,34 +102,41 @@ export class PluginMagickEngine implements PluginImageEngine {
 	export(
 		context: MainPluginContext,
 		source: TFile,
-		exportFormat: ExportFormat,
+		settings: ImgkRuntimeExportSettings,
 		refElement: HTMLElement
 	): Promise<void> {
 		return new Promise(async (resolve, reject) => {
-			const exportData = resolveExportData(context, source, exportFormat);
+			const exportData = resolveExportDstInfo(
+				context,
+				source,
+				settings.data
+			);
+
 			if (exportData.isLatest) {
+				console.log("pass already exists : ", exportData.path);
 				resolve();
 				return;
 			}
 
+			console.log("start export", source, exportData);
+			let canvasElement: HTMLCanvasElement | undefined;
 			try {
-				const canvasElement: HTMLCanvasElement = await this.draw(
-					context,
-					source,
-					refElement
-				);
+				canvasElement = await this.draw(context, source, refElement);
+				console.log("draw complete", source, exportData);
 
 				await exportCanvasWithBlob(
 					context,
 					canvasElement,
-					exportFormat,
-					true,
+					settings.data.format,
+					settings.data.imgProps.quality,
 					exportData.path,
 					exportData.file
 				);
 
+				canvasElement.remove();
 				resolve();
 			} catch (e) {
+				canvasElement?.remove();
 				reject(e);
 			}
 		});

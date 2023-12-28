@@ -20,8 +20,9 @@ import {
 import { findValutFile, isTFile } from "../vault_util";
 import { MainPluginContext } from "../context";
 import { PIE } from "../engines/imgEngines";
-import * as pb from "path-browserify";
+
 import { ImgkMutationObserver } from "./mutation_ob";
+import { lowerCasedExtNameWithoutDot } from "../utils/obsidian_path";
 
 export function normalImgHandler(
 	context: MainPluginContext,
@@ -29,8 +30,19 @@ export function normalImgHandler(
 	observer?: ImgkMutationObserver,
 	cmView?: EditorView
 ) {
-	const supportedFormats = context.plugin.settingsUtil.getSupportedFormats();
+	const supportedFormats =
+		context.plugin.settingsUtil.getRuntimeSupportedFormats();
 	const imgEls = contentDOM.querySelectorAll("img");
+
+	const adapter = context.plugin.app.vault.adapter;
+	const fsa: FileSystemAdapter | undefined =
+		adapter instanceof FileSystemAdapter ? adapter : undefined;
+
+	if (!fsa) {
+		return;
+	}
+
+	const basePath = fsa.getBasePath();
 
 	for (let i = 0; i < imgEls.length; i++) {
 		const imgEl = imgEls[i];
@@ -42,51 +54,40 @@ export function normalImgHandler(
 			continue;
 		}
 
+		if (!src.startsWith("app://")) {
+			continue;
+		}
+
 		let srcFile: TFile | undefined | null;
 
-		if (src.startsWith("app://")) {
-			const qIndex = src.lastIndexOf("?");
-			let fullResPath = src;
-			if (qIndex >= 0) {
-				fullResPath = src.substring(0, qIndex);
+		const qIndex = src.lastIndexOf("?");
+		let fullResPath = src;
+		if (qIndex >= 0) {
+			fullResPath = src.substring(0, qIndex);
+		}
+
+		const ext = lowerCasedExtNameWithoutDot(fullResPath);
+		if (ext.length < 1) {
+			continue;
+		}
+
+		let isSupportedExt = supportedFormats.includes(ext);
+		if (!isSupportedExt) {
+			continue;
+		}
+
+		const basePathIdx = fullResPath.indexOf(basePath);
+		if (basePathIdx >= 0) {
+			let valutRelativePath = fullResPath.substring(
+				basePathIdx + basePath.length
+			);
+
+			//remove slash start
+			if (valutRelativePath.startsWith("/")) {
+				valutRelativePath = valutRelativePath.substring(1);
 			}
 
-			const ext = pb.extname(fullResPath).toLowerCase();
-			if (ext) {
-				const extWithoutDot = ext.startsWith(".")
-					? ext.substring(1)
-					: ext;
-
-				let isSupportedExt = supportedFormats.contains(extWithoutDot);
-				if (isSupportedExt) {
-					if (
-						context.plugin.app.vault.adapter instanceof
-						FileSystemAdapter
-					) {
-						const fsa: FileSystemAdapter =
-							context.plugin.app.vault.adapter;
-						const basePath = fsa.getBasePath();
-						const basePathIdx = fullResPath.indexOf(basePath);
-						if (basePathIdx >= 0) {
-							let valutRelativePath = fullResPath.substring(
-								basePathIdx + basePath.length
-							);
-
-							//remove slash start
-							if (valutRelativePath.startsWith("/")) {
-								valutRelativePath =
-									valutRelativePath.substring(1);
-							}
-
-							srcFile = findValutFile(
-								context,
-								valutRelativePath,
-								true
-							);
-						}
-					}
-				}
-			}
+			srcFile = findValutFile(context, valutRelativePath, true);
 		}
 
 		if (!srcFile) {
@@ -139,7 +140,8 @@ export function linkedImgHandler(
 	// return Decoration.none;
 
 	const internalEmbeds = contentDOM.querySelectorAll(".internal-embed");
-	const supportedFormats = context.plugin.settingsUtil.getSupportedFormats();
+	const supportedFormats =
+		context.plugin.settingsUtil.getRuntimeSupportedFormats();
 
 	for (let i = 0; i < internalEmbeds.length; i++) {
 		const internalEmbed = internalEmbeds[i];
@@ -163,6 +165,14 @@ export function linkedImgHandler(
 			"img.imgk-plugin-item"
 		);
 
+		// if (!img) {
+		// 	let normalImg: HTMLImageElement | null =
+		// 		internalEmbed.querySelector("img");
+		// 	if (normalImg) {
+		// 		img = normalImg;
+		// 	}
+		// }
+
 		//apply size without redrawing
 		if (img) {
 			applyContainerMdSize(
@@ -177,7 +187,6 @@ export function linkedImgHandler(
 		// console.log(internalEmbed);
 
 		let draw = true;
-
 		if (img) {
 			draw = !isLatestImgDrawnElement(img, srcFile);
 		} else {
@@ -211,6 +220,7 @@ export function linkedImgHandler(
 		if (context.plugin.settings.disbleClickToNavigate) {
 			internalEmbed.onClickEvent(
 				(e) => {
+					console.log;
 					// e.stopImmediatePropagation();
 					e.stopPropagation();
 					e.preventDefault();
@@ -257,7 +267,7 @@ export function drawImageOnElement(
 	observer?: ImgkMutationObserver
 ) {
 	//disable img click
-	img.style.pointerEvents = "none";
+	// img.style.pointerEvents = "none";
 
 	signModDate(img, targetFile);
 
@@ -329,10 +339,29 @@ export function attachImgFollower(
 	});
 
 	const followImg = () => {
-		imgOverlayEl!.style.left = `${img.offsetLeft}px`;
-		imgOverlayEl!.style.top = `${img.offsetTop}px`;
-		imgOverlayEl!.style.width = `${img.offsetWidth}px`;
-		imgOverlayEl!.style.height = `${img.offsetHeight}px`;
+		const newLeft = `${img.offsetLeft}px`;
+		const newTop = `${img.offsetTop}px`;
+		const newWidth = `${img.offsetWidth}px`;
+		const newHeight = `${img.offsetHeight}px`;
+
+		let hasChanges = false;
+		if (newLeft !== imgOverlayEl!.style.left) {
+			hasChanges = true;
+			imgOverlayEl!.style.left = newLeft;
+		}
+		if (newTop !== imgOverlayEl!.style.top) {
+			hasChanges = true;
+			imgOverlayEl!.style.top = newTop;
+		}
+
+		if (newWidth !== imgOverlayEl!.style.width) {
+			hasChanges = true;
+			imgOverlayEl!.style.width = newWidth;
+		}
+		if (newHeight !== imgOverlayEl!.style.height) {
+			hasChanges = true;
+			imgOverlayEl!.style.height = newHeight;
+		}
 
 		// console.log(
 		// 	"followImg ",
@@ -345,13 +374,28 @@ export function attachImgFollower(
 		// 	img.offsetWidth,
 		// 	img.offsetHeight
 		// );
-		const success = img.offsetWidth > 0 || img.offsetHeight > 0;
-		return success;
+
+		return hasChanges;
 	};
+
+	let infinityLoopAvoider: boolean = false;
 
 	const lazyFollowImg = () => {
 		followImg();
+
+		if (infinityLoopAvoider) {
+			console.log("canve");
+			return false;
+		}
+
+		infinityLoopAvoider = true;
+
 		setTimeout(followImg, 0);
+		setTimeout(followImg, 300);
+		setTimeout(followImg, 600);
+		setTimeout(() => {
+			infinityLoopAvoider = false;
+		}, 1001);
 	};
 
 	followImg();

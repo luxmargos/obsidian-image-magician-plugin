@@ -63,7 +63,7 @@ export const livePreviewExtension = (context: MainPluginContext) =>
 				}
 
 				const supportedFormats =
-					context.plugin.settingsUtil.getSupportedFormats();
+					context.plugin.settingsUtil.getRuntimeSupportedFormats();
 
 				const internalEmbeds =
 					view.contentDOM.querySelectorAll(".internal-embed");

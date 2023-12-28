@@ -1,23 +1,14 @@
-import { TFile } from "obsidian";
+import { TFile, normalizePath } from "obsidian";
 import * as pb from "path-browserify";
 import { findValutFile } from "./vault_util";
 import { PluginContext } from "./context";
+import { ImgkExportSettings } from "./settings/settings";
+import * as bp from "path-browserify";
 
 export type ExportFormat = {
 	display?: string;
 	mimeType: string;
 	ext: string;
-	optAvoidStringFormat?: boolean;
-	quality: number;
-
-	scaleX?: number;
-	scaleY?: number;
-	fixedWidth?: number;
-	fixedHeight?: number;
-	maxWidth?: number;
-	maxHeight?: number;
-	minWidth?: number;
-	minHeight?: number;
 };
 
 export const exportFormatMap: Record<string, ExportFormat> = {
@@ -25,21 +16,18 @@ export const exportFormatMap: Record<string, ExportFormat> = {
 		display: "PNG",
 		mimeType: "image/png",
 		ext: "png",
-		quality: 1,
 	},
 
 	jpg: {
 		display: "JPEG",
 		mimeType: "image/jpeg",
 		ext: "jpg",
-		quality: 1,
 	},
 
 	webp: {
 		display: "WEBP",
 		mimeType: "image/webp",
 		ext: "webp",
-		quality: 1,
 	},
 };
 
@@ -61,81 +49,66 @@ export const isImageExportFormat = (
 	);
 };
 
-export const getExportSuffix = (
-	context: PluginContext,
-	exportFormat: ExportFormat
-): string => {
-	if (exportFormat.optAvoidStringFormat) {
-		return `.${exportFormat.ext}`;
+export const genExportPath = (
+	settings: ImgkExportSettings,
+	srcFile: TFile | string
+) => {
+	const srcFilePath: string =
+		srcFile instanceof TFile ? srcFile.path : srcFile;
+
+	const dir = bp.dirname(srcFilePath);
+
+	const srcFileName = bp.basename(srcFilePath);
+	let srcFileNameWithoutExt = bp.basename(srcFilePath);
+	let srcExt = bp.extname(srcFilePath);
+
+	if (srcFileNameWithoutExt.endsWith(srcExt)) {
+		srcFileNameWithoutExt = srcFileNameWithoutExt.substring(
+			0,
+			srcFileNameWithoutExt.lastIndexOf(srcExt)
+		);
 	}
 
-	return `.exported.${exportFormat.ext}`;
-};
+	if (srcExt.startsWith(".")) {
+		srcExt = srcExt.substring(1);
+	}
 
-export const getExportFileName = (
-	context: PluginContext,
-	file: TFile,
-	exportFormat: ExportFormat
-): string => {
-	return buildExportFileName(context, file.path, exportFormat);
-};
+	const expFileName = settings.pathOpts.fileNameFormat
+		.replace(/\$\{name\}/g, srcFileNameWithoutExt)
+		.replace(/\$\{ext\}/g, srcExt)
+		.replace(/\$\{dst_ext\}/g, settings.format.ext)
+		.trim();
 
-export const getExportFilePath = (
-	context: PluginContext,
-	file: TFile,
-	exportFormat: ExportFormat
-): string => {
-	return buildExportFilePath(context, file.path, exportFormat);
-};
-
-export const buildExportFileName = (
-	context: PluginContext,
-	targetPath: string,
-	exportFormat: ExportFormat
-): string => {
-	return `${pb.basename(targetPath)}${getExportSuffix(
-		context,
-		exportFormat
-	)}`;
-};
-
-export const buildExportFilePath = (
-	context: PluginContext,
-	targetPath: string,
-	exportFormat: ExportFormat
-): string => {
-	return `${targetPath}${getExportSuffix(context, exportFormat)}`;
-};
-
-/**
- * @deprecated
- *
- * @param context
- * @param targetFile
- * @param exportFormat
- * @param propName
- */
-export const embedMarkDownCreator = async (
-	context: PluginContext,
-	targetFile: TFile,
-	exportFormat: ExportFormat,
-	propName: string
-) => {
-	const mdPath = getExportFilePath(context, targetFile, exportFormat);
-	const markdownContent = `---
-${propName}: true
----
-![[${targetFile.path}]]
-`;
-
-	const mdFile = findValutFile(context, mdPath);
-	if (mdFile) {
-		if (targetFile.stat.mtime > mdFile.stat.mtime) {
-			// console.log("modify : ", markdownContent);
-			await context.plugin.app.vault.modify(mdFile, markdownContent);
+	let dirText = dir;
+	if (!settings.pathOpts.asRelativePath) {
+		if (dir.length > 0 && dir !== ".") {
+			dirText = settings.pathOpts.exportDirAbs + "/" + dir;
+		} else {
+			dirText = settings.pathOpts.exportDirAbs;
 		}
 	} else {
-		// console.log(mdPath, "create new : ", markdownContent);
-		await context.plugin.app.vault.create(mdPath, markdownContent);
+		if (dir.length > 0 && dir !== ".") {
+			dirText = dir + "/" + settings.pathOpts.exportDirRel;
+		} else {
+			dirText = settings.pathOpts.exportDirRel;
+		}
 	}
+
+	if (dirText.length > 0 && !dirText.endsWith("/")) {
+		dirText = `${dirText}/`;
+	}
+
+	const dst = normalizePath(`${dirText}${expFileName}`);
+
+	return {
+		src: {
+			name: srcFileName,
+			nameWithoutExt: srcFileNameWithoutExt,
+			ext: srcExt,
+		},
+		dst: {
+			path: dst,
+			name: expFileName,
+		},
+	};
 };

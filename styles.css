@@ -11,6 +11,11 @@ canvas.imgk-plugin-item:not([width]) {
 	max-width: 100%;
 }
 
+canvas.imgk-plugin-item {
+	pointer-events: none;
+	opacity: 0;
+}
+
 img.imgk-plugin-item:not([width]) {
 	max-width: 100%;
 }
@@ -29,6 +34,15 @@ img.imgk-plugin-item:not([width]) {
 	.view-content
 	.image-container:has(img:not([height])) {
 	height: 100%;
+}
+
+.view-content .imgk-view-tools {
+	/* position: absolute; */
+	background-color: blue;
+}
+
+.view-content:hover .imgk-view-tools {
+	background-color: red;
 }
 
 .workspace-leaf-content
@@ -56,4 +70,95 @@ img.imgk-plugin-item:not([width]) {
 
 	/* right: 0; */
 	/* bottom: 0; */
+}
+
+.setting-item .setting-item-control .imgk-textarea {
+	flex-grow: 1;
+	/* min-height: 100px; */
+	height: 100px;
+	min-width: 300px;
+}
+
+.setting-item .imgk-settings-quality {
+	min-width: 50px;
+}
+
+.setting-item.imgk-no-border {
+	border: none;
+}
+.setting-item.imgk-settings-group-member {
+	border: none;
+	padding: 0.2em 0;
+}
+
+.setting-item.imgk-settings-group-member-last {
+	border: none;
+	padding-top: 0.2em;
+}
+
+.setting-item .imgk-size-input {
+	min-width: 100px;
+	width: 100px;
+	text-align: center;
+}
+
+.setting-item.imgk-settings-indent-1 {
+	/* padding-left: 1em; */
+	/* margin-block-start: 3em; */
+	margin-left: 1.5em;
+}
+
+.setting-item.imgk-settings-indent-heading-1 {
+	/* padding-left: 1em; */
+	/* margin-block-start: 3em; */
+	margin-left: 1.5em;
+	margin-top: 0em;
+}
+
+.setting-item.imgk-controls-only .setting-item-info {
+	display: none;
+}
+
+.setting-item.imgk-controls-only .setting-item-control {
+	flex-grow: 1;
+}
+
+.setting-item.imgk-wide-controls .setting-item-control {
+	flex-grow: 1;
+}
+
+.setting-item input.imgk-wide-input {
+	flex-grow: 1;
+}
+
+.setting-item input.imgk-narrow-input {
+	min-width: 70px;
+	width: 70px;
+	text-align: center;
+}
+
+.setting-item .imgk-fill-space {
+	flex-grow: 1;
+}
+
+/* .setting-item .setting-item-control button:has([disabled]) {
+	opacity: 0.5;
+} */
+
+.imgk-custom-setting-item:has(.setting-item) {
+	padding: 0.75em 0;
+	border-top: 1px solid var(--background-modifier-border);
+}
+
+.setting-item .imgk-toggle-off {
+	opacity: 0.3;
+}
+
+.setting-item.imgk-warning * {
+	color: #cc0000;
+}
+
+.imgk-export-supporter {
+	opacity: 0;
+	pointer-events: none;
 }
