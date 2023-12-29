@@ -7,6 +7,7 @@ import {
 	TFile,
 } from "obsidian";
 import ImgMagicianPlugin from "./main";
+import { debug } from "loglevel";
 
 class FieldSuggester extends EditorSuggest<string> {
 	plugin: ImgMagicianPlugin;
@@ -23,14 +24,14 @@ class FieldSuggester extends EditorSuggest<string> {
 		editor: Editor,
 		file: TFile
 	): EditorSuggestTriggerInfo | null {
-		console.log("onTrigger");
+		debug("onTrigger");
 		if (true) {
 			const sub = editor.getLine(cursor.line).substring(0, cursor.ch);
 			const line = editor.getLine(cursor.line);
-			console.log("sub", sub);
-			console.log("line", line);
+			debug("sub", sub);
+			debug("line", line);
 			const match = line.match(/\[.*psd/);
-			console.log("match", match);
+			debug("match", match);
 			// if (match !== undefined) {
 			//   this.suggestType = 'psd';
 			//   this.latestTriggerInfo = {

@@ -12,6 +12,7 @@ import type { PluginValue } from "@codemirror/view";
 import { findValutFile, isTFile } from "../vault_util";
 import { MainPluginContext } from "../context";
 import { PIE } from "../engines/imgEngines";
+import { debug } from "loglevel";
 
 /**
  * @deprecated
@@ -28,17 +29,6 @@ export const livePreviewExtension = (context: MainPluginContext) =>
 			}
 
 			update(update: ViewUpdate) {
-				// console.log("updated", update);
-
-				// if (update.state.field(editorInfoField)) {
-				// 	console.log("editorInfoField");
-				// }
-				// if (update.state.field(editorEditorField)) {
-				// 	console.log("editorEditorField");
-				// }
-				// if (update.state.field(editorLivePreviewField)) {
-				// 	console.log("editorLivePreviewField");
-				// }
 				if (!update.state.field(editorLivePreviewField)) {
 					this.decorations = Decoration.none;
 					return;
@@ -68,8 +58,6 @@ export const livePreviewExtension = (context: MainPluginContext) =>
 				const internalEmbeds =
 					view.contentDOM.querySelectorAll(".internal-embed");
 
-				console.log("internal embeds : ", internalEmbeds);
-
 				for (let i = 0; i < internalEmbeds.length; i++) {
 					const internalEmbed = internalEmbeds[i];
 					if (!(internalEmbed instanceof HTMLElement)) {
@@ -88,10 +76,6 @@ export const livePreviewExtension = (context: MainPluginContext) =>
 						continue;
 					}
 
-					// console.log("posAtDom ", view.posAtDOM(internalEmbed));
-					// console.log("found file : ", srcFile.path);
-					// console.log(internalEmbed);
-
 					const titleNode =
 						internalEmbed.querySelector(".file-embed-title");
 					let draw = true;
@@ -106,9 +90,7 @@ export const livePreviewExtension = (context: MainPluginContext) =>
 								if (modDate >= srcFile.stat.mtime) {
 									draw = false;
 								}
-							} catch (e) {
-								console.log(e);
-							}
+							} catch (e) {}
 						}
 					} else {
 						cv = internalEmbed.createEl("canvas", {
@@ -117,7 +99,7 @@ export const livePreviewExtension = (context: MainPluginContext) =>
 					}
 
 					if (!draw) {
-						console.log("pass redrawing");
+						debug("pass redrawing");
 						continue;
 					}
 
@@ -128,7 +110,6 @@ export const livePreviewExtension = (context: MainPluginContext) =>
 					// internalEmbed.setAttribute("draggable", "true");
 
 					const posOfInternalEmbed = view.posAtDOM(internalEmbed);
-					console.log("posOfInternalEmbed", posOfInternalEmbed);
 					cv.setAttribute(
 						"src",
 						context.plugin.app.vault.getResourcePath(srcFile)
@@ -145,19 +126,14 @@ export const livePreviewExtension = (context: MainPluginContext) =>
 					);
 
 					if (titleNode && titleNode instanceof HTMLElement) {
-						console.log("replace child node");
-						// titleNode.style.display = "none";
 						titleNode.style.height = "0px";
 						titleNode.style.opacity = "0";
-						// titleNode.style.pointerEvents = "none";
-
-						// internalEmbed.replaceChild(cv, titleNode);
-						// internalEmbed.replaceWith(cv);
+						titleNode.style.pointerEvents = "none";
 					}
 
 					// internalEmbed.style.pointerEvents = "none";
 					cv.addEventListener("mousedown", (e) => {
-						console.log("mousedown");
+						// console.log("mousedown");
 						// const posAtDom = view.posAtDOM(internalEmbed);
 						// view.dispatch({
 						// 	// selection: EditorSelection.create([
@@ -169,7 +145,6 @@ export const livePreviewExtension = (context: MainPluginContext) =>
 						e.stopPropagation();
 					});
 					cv.addEventListener("dragstart", (e) => {
-						console.log("drag start", e);
 						e.dataTransfer?.setData("line", srcFile.path);
 						e.dataTransfer?.setData("link", srcFile.path);
 						e.dataTransfer?.setData(
@@ -183,7 +158,6 @@ export const livePreviewExtension = (context: MainPluginContext) =>
 					//block origin event
 					internalEmbed.onClickEvent(
 						(e) => {
-							console.log("click");
 							// e.stopImmediatePropagation();
 							e.stopPropagation();
 							return false;
@@ -194,18 +168,6 @@ export const livePreviewExtension = (context: MainPluginContext) =>
 						}
 					);
 
-					// internalEmbed.addEventListener("click", (e) => {
-					// 	console.log("click");
-					// 	e.stopImmediatePropagation();
-					// 	e.stopPropagation();
-					// 	return false;
-					// });
-
-					console.log("onclick : ", internalEmbed.onclick);
-					//@ts-ignore
-					console.log("onclick t : ", titleNode.onclick);
-
-					// console.log(img);
 					// img.setAttribute(
 					// 	"src",
 					// 	context.plugin.app.vault.getResourcePath(srcFile)
@@ -216,8 +178,6 @@ export const livePreviewExtension = (context: MainPluginContext) =>
 					// 	String(srcFile.stat.mtime)
 					// );
 
-					// internalEmbed.empty();
-					// internalEmbed.innerHTML = "FOUND : " + srcFile.path;
 					PIE.magick()
 						.drawOnCanvas(context, srcFile, cv)
 						.then(

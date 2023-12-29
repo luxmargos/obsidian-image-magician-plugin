@@ -11,23 +11,25 @@ import {
 	ToggleComponent,
 } from "obsidian";
 import { MainPluginContext } from "../context";
-import { exportFormatList, genExportPath } from "../exporter";
+import { exportFormatList, genExportPath } from "../export_settings";
 import {
-	DEFAULT_EXPORT_FORMATS,
 	DEFAULT_EXPORT_SETTINGS,
 	DEFAULT_FILE_NAME_FORMAT,
 	ImgkSizeAdjustType,
 	ImgkExportSettings,
 	ImgkImageSize,
 	ImgkPluginSettings,
-	ImgkTextFilter,
-	ImgkTextFilterType,
+	ImgkFileFilterType,
 	getDefaultSupportedFormats,
 	getWarnList,
+	ImgkTextFilter,
+	DEFAULT_FILE_NAME_PREFIX,
+	DEFAULT_FILE_NAME_SUFFIX,
 } from "./settings";
-import { cloneDeep, head } from "lodash-es";
+import { cloneDeep } from "lodash-es";
 import { ImgkPluginExportDialog } from "../dialogs/export_opt_dialog";
 import { normalizeObsidianDir } from "../utils/obsidian_path";
+import { debug } from "loglevel";
 
 const ClsGroupMember = "imgk-settings-group-member";
 const ClsGroupMemberLast = "imgk-settings-group-member-last";
@@ -112,6 +114,8 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 			containerEl,
 			"Supported formats",
 			"The plugin will support viewing the image formats listed here. Additionally, you can try any image format by adding it to the list with comma separation. If you attempt to remove a format from the list, restart the Obsidian application to apply the changes.",
+			"e.g., psd, tiff, xcf",
+			false,
 			() => settings.supportedFormats,
 			() => getDefaultSupportedFormats(),
 			(value: string[]) => {
@@ -120,7 +124,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 			(value: string) => {
 				refreshWarnings();
 			}
-		);
+		).setting[1].settingEl.addClass(ClsGroupMemberLast);
 
 		warnSet = new Setting(containerEl);
 		warnSet.setName(
@@ -131,20 +135,11 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 		refreshWarnings();
 
 		const headingSet = new Setting(containerEl);
-		headingSet.setName("Export");
-		headingSet.setHeading();
-
-		ImgkPluginSettingTab.createFormatEditSets(
-			containerEl,
-			"Image format filter",
-			"The plugin determines which image formats to include in the export feature based on the list here",
-			() => settings.exportSourceExtsFilter,
-			() => DEFAULT_EXPORT_FORMATS,
-			(value: string[]) => {
-				settings.exportSourceExtsFilter = value;
-			},
-			() => {}
+		headingSet.setName("Auto Export");
+		headingSet.setDesc(
+			"Automatically export the images in the selected format when the original image is modified or created."
 		);
+		headingSet.setHeading();
 
 		ImgkPluginSettingTab.createExportSets(
 			context,
@@ -152,6 +147,30 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 			settings,
 			settings.autoExportList
 		);
+
+		new Setting(containerEl)
+			.setName("Rename exproted images on source file rename")
+			.setDesc(
+				"Exported images will be renamed when their source files are renamed."
+			)
+			.addToggle((comp) => {
+				comp.setValue(settings.trackRename);
+				comp.onChange((value) => {
+					settings.trackRename = value;
+				});
+			});
+
+		new Setting(containerEl)
+			.setName("Delete exported images on source file delete")
+			.setDesc(
+				"Exported images will be deleted when their source files are deleted."
+			)
+			.addToggle((comp) => {
+				comp.setValue(settings.trackDelete);
+				comp.onChange((value) => {
+					settings.trackDelete = value;
+				});
+			});
 	}
 
 	static createExportGeneralSets(
@@ -175,6 +194,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 		containerEl: HTMLElement,
 		pluginSettings: ImgkPluginSettings,
 		settings: ImgkExportSettings,
+		onUpdate: () => void,
 		srcFilePath?: string
 	) {
 		const isInstantMode = srcFilePath !== undefined;
@@ -185,7 +205,6 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 		let exportDirRelativeSet: Setting;
 
 		const pathOpts = settings.pathOpts;
-		const exportFormat = settings.format;
 
 		let exportPreviewSet: Setting;
 		let exportPreviewSrcSet: Setting;
@@ -197,30 +216,85 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 
 		const textPreviewSettings = "Path simulation";
 
-		const refreshExportPreview = () => {
-			let exportPathData;
-			if (isInstantMode) {
-				exportPathData = genExportPath(settings, srcFilePath);
-				customPathComp?.setValue(exportPathData.dst.path);
-			} else {
-				let testFilePath = "My Image.psd";
-				let srcDir = normalizeObsidianDir(settings.pathOpts.sourceDir);
-				if (srcDir.length > 0) {
-					testFilePath = `${srcDir}/${testFilePath}`;
-				}
-
-				exportPathData = genExportPath(settings, testFilePath);
-
-				exportPreviewSet?.setName(
-					`${textPreviewSettings} (${exportPathData.src.ext} to ${exportFormat.ext})`
-				);
-
-				exportPreviewSrcSet?.setDesc(`Source : ${testFilePath}`);
-				exportPreviewDstSet?.setDesc(
-					`Destination : ${exportPathData.dst.path}`
-				);
-			}
+		const instantExportPathGetter = () => {
+			return customPathComp?.getValue() ?? "";
 		};
+
+		const refreshExportPreview = () => {
+			if (isInstantMode) {
+				const exportPathData = genExportPath(
+					settings,
+					srcFilePath,
+					undefined
+				);
+				if (exportPathData) {
+					customPathComp?.setValue(exportPathData.dst.path);
+					customPathComp?.inputEl.removeClass("imgk-warning");
+					customPathNameSet?.settingEl.removeClass("imgk-warning");
+				} else {
+					customPathComp?.setValue("");
+					customPathComp?.inputEl.addClass("imgk-warning");
+					customPathNameSet?.settingEl.addClass("imgk-warning");
+				}
+			} else {
+				try {
+					if (settings.pathOpts.sourceExts.length < 1) {
+						throw new Error("No source extensions");
+					}
+
+					const firstSourceExt = settings.pathOpts.sourceExts[0];
+					const otherExts = settings.pathOpts.sourceExts.filter(
+						(item, itemIndex) => {
+							return itemIndex > 0;
+						}
+					);
+
+					let testFileName = "My Image.";
+					let testFilePath = testFileName + firstSourceExt;
+					let srcDir = normalizeObsidianDir(
+						settings.pathOpts.sourceDir
+					);
+					if (srcDir.length > 0) {
+						testFilePath = `${srcDir}/${testFilePath}`;
+					}
+
+					let otherExtsStr: string = "";
+					if (otherExts.length > 0) {
+						otherExtsStr = `, ${otherExts.join(", ")}`;
+					}
+					exportPreviewSrcSet?.setDesc(
+						`Source : ${testFilePath}${otherExtsStr}`
+					);
+
+					const exportPathData = genExportPath(
+						settings,
+						testFilePath,
+						undefined
+					);
+
+					if (!exportPathData) {
+						throw new Error("There are no export path");
+					}
+
+					exportPreviewSet?.setName(
+						`${textPreviewSettings} (${exportPathData.src.ext} to ${settings.format.ext})`
+					);
+					exportPreviewSet?.setDesc("");
+					exportPreviewSet?.settingEl.removeClass("imgk-warning");
+
+					exportPreviewDstSet?.setDesc(
+						`Destination : ${exportPathData.dst.path}`
+					);
+				} catch (error) {
+					exportPreviewSet?.setName(textPreviewSettings);
+					exportPreviewSet?.settingEl.addClass("imgk-warning");
+					exportPreviewSet?.setDesc("There are invalid settings.");
+					exportPreviewSrcSet?.setDesc("");
+					exportPreviewDstSet?.setDesc("");
+				}
+			}
+			onUpdate();
+		}; // end of refresher
 
 		if (!isInstantMode) {
 			const sourceSet = new Setting(containerEl);
@@ -243,111 +317,125 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 				});
 			});
 
-			const sourceFormatSetName = "Image format filter";
-			let sourceFormatSet: Setting;
-			let customSourceFileFormatSet: Setting;
-			const refreshCustomSourceFileFormats = () => {
-				customSourceFileFormatSet?.settingEl.toggle(
-					!settings.pathOpts.useDefaultExtFilter
-				);
-				if (settings.pathOpts.useDefaultExtFilter) {
-					sourceFormatSet.setName(
-						`${sourceFormatSetName} (Using default plugin settings)`
-					);
-
-					sourceFormatSet.setDesc(
-						pluginSettings.exportSourceExtsFilter.join(", ")
-					);
-				} else {
-					sourceFormatSet.setName(`${sourceFormatSetName}`);
-					sourceFormatSet.setDesc("Edit with comma separated list.");
-				}
-			};
-
-			sourceFormatSet = new Setting(containerEl);
-			sourceFormatSet.settingEl.classList.add("imgk-wide-controls");
-			sourceFormatSet.setName(sourceFormatSetName);
-			sourceFormatSet.addToggle((comp) => {
-				comp.setValue(!settings.pathOpts.useDefaultExtFilter);
-				comp.onChange((value) => {
-					settings.pathOpts.useDefaultExtFilter = !value;
-					refreshCustomSourceFileFormats();
-				});
-			});
-
-			customSourceFileFormatSet =
-				ImgkPluginSettingTab.createFormatEditSets(
-					containerEl,
-					"",
-					"",
-					() => settings.pathOpts.sourceExts,
-					() => pluginSettings.exportSourceExtsFilter,
-					(value: string[]) => {
-						settings.pathOpts.sourceExts = value;
-					},
-					() => {}
-				).setting;
-			customSourceFileFormatSet.settingEl.classList.add(
-				ClsGroupMemberLast
-			);
-			customSourceFileFormatSet.settingEl.classList.add(
-				"imgk-controls-only"
-			);
-
-			refreshCustomSourceFileFormats();
-			const sourceFilterSet = new Setting(containerEl).setDesc(
-				"You can export specific files with filter options."
-			);
-
-			const filterListName = "Filters";
-
-			sourceFilterSet.addButton((comp: ButtonComponent) => {
-				comp.setIcon("plus-circle");
-				comp.onClick((evt) => {
-					settings.pathOpts.sourceFilters.push({
-						content: "",
-						type: ImgkTextFilterType.PlainText,
-						flags: "",
+			new Setting(containerEl)
+				.setName("Recursive")
+				.setDesc("Includes sub-folder files recursively.")
+				.addToggle((comp) => {
+					comp.setValue(settings.pathOpts.recursiveSources);
+					comp.onChange((value) => {
+						settings.pathOpts.recursiveSources = value;
 					});
-					refreshSourceFilterList();
 				});
-			});
 
-			const allFilterSets: Setting[] = [];
-			const listDiv = containerEl.createDiv({
-				cls: "imgk-custom-setting-item",
-			});
-			const refreshSourceFilterList = () => {
-				for (const setItem of allFilterSets) {
-					setItem.settingEl.remove();
+			ImgkPluginSettingTab.createFormatEditSets(
+				containerEl,
+				"Image format filter",
+				"Insert image formats of export target with comma separated list.",
+				"e.g., psd, tiff, xcf",
+				false,
+				() => settings.pathOpts.sourceExts,
+				() => [],
+				(value: string[]) => {
+					settings.pathOpts.sourceExts = value;
+				},
+				() => {
+					refreshExportPreview();
 				}
-				allFilterSets.splice(0, allFilterSets.length);
+			).setting[1].settingEl.addClass(ClsGroupMemberLast);
 
-				if (settings.pathOpts.sourceFilters.length > 0) {
-					sourceFilterSet.setName(filterListName);
-				} else {
-					sourceFilterSet.setName(`${filterListName} (empty)`);
-				}
-
-				settings.pathOpts.sourceFilters.forEach((item, itemIndex) => {
-					const rowSet = this.createSourceFilterRow(
+			const listController = this.createList(
+				"Filters",
+				"You can export specific files with filter options.",
+				containerEl,
+				settings.pathOpts.sourceFilters,
+				() => {
+					return {
+						active: true,
+						content: "",
+						type: ImgkFileFilterType.Includes,
+						flags: "",
+						isReversed: false,
+					};
+				},
+				(listContEl, item, itemIndex) => {
+					return this.createSourceFilterRow(
 						context,
-						listDiv,
+						listContEl,
 						item,
 						() => {
-							settings.pathOpts.sourceFilters.splice(
-								itemIndex,
-								1
-							);
-							refreshSourceFilterList();
+							listController.removeItem(itemIndex);
 						}
 					);
-					allFilterSets.push(rowSet);
+				}
+			);
+
+			let builtInFiltersListExpanded = false;
+			let builtInFiltersExpandButton: ExtraButtonComponent;
+			let builtInFiltersListDiv: HTMLElement;
+			let builtInFiltersSet: Setting;
+			const builtInFiltersName = "Built-in filters";
+			const refreshBuiltInFiltersName = () => {
+				let activeCount = 0;
+				settings.pathOpts.builtInSourceFilters.forEach((item) => {
+					if (item.active) {
+						activeCount += 1;
+					}
 				});
+
+				if (activeCount < 1) {
+					builtInFiltersSet.setName(
+						`${builtInFiltersName} (no activated items)`
+					);
+				} else {
+					builtInFiltersSet.setName(
+						`${builtInFiltersName} (${activeCount} items activated)`
+					);
+				}
+			};
+			const refreshBuiltInFiltersListState = () => {
+				if (builtInFiltersListExpanded) {
+					builtInFiltersExpandButton?.setIcon("chevron-down");
+				} else {
+					builtInFiltersExpandButton?.setIcon("chevron-right");
+				}
+				builtInFiltersListDiv?.toggle(builtInFiltersListExpanded);
 			};
 
-			refreshSourceFilterList();
-		}
+			builtInFiltersSet = new Setting(containerEl)
+				.setDesc(
+					"Filters to enhance auto-export stability. You can enable or disable each setting individually."
+				)
+				.addExtraButton((comp) => {
+					builtInFiltersExpandButton = comp;
+					comp.onClick(() => {
+						builtInFiltersListExpanded =
+							!builtInFiltersListExpanded;
+						refreshBuiltInFiltersListState();
+					});
+					refreshBuiltInFiltersListState();
+				});
+
+			builtInFiltersListDiv = this.createListDiv(containerEl);
+			for (const filter of settings.pathOpts.builtInSourceFilters) {
+				const filterSet = new Setting(builtInFiltersListDiv);
+				if (filter.type === ImgkFileFilterType.DoubleExtsBlocker) {
+					filterSet.setName("Double extensions blocker");
+					filterSet.setDesc(
+						"Avoid export if source file has at least two extensions. The filter determine file is already exported from another source. e.g, 'MyImage.psd.exported.png'"
+					);
+				}
+
+				filterSet.addToggle((comp) => {
+					comp.setValue(filter.active);
+					comp.onChange((value) => {
+						filter.active = value;
+						refreshBuiltInFiltersName();
+					});
+				});
+			}
+			refreshBuiltInFiltersListState();
+			refreshBuiltInFiltersName();
+		} // end of non-instant mode
 
 		dstSet = new Setting(containerEl);
 		dstSet.setName("Destination");
@@ -402,35 +490,132 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 				});
 			});
 
-		const nameFormatSet: Setting = new Setting(containerEl);
-		let nameFormatSetComp: TextComponent;
+		let customFileNameFormatSet: Setting;
+		let fileNameFormatPrefixSet: Setting;
+		let fileNameFormatSuffixSet: Setting;
 
-		const refershNameFormat = () => {
-			nameFormatSetComp?.setValue(settings.pathOpts.fileNameFormat);
+		const refreshFileNameFormatSets = () => {
+			customFileNameFormatSet?.settingEl.toggle(
+				settings.pathOpts.useCustomFileNameFormat
+			);
+			fileNameFormatPrefixSet?.settingEl.toggle(
+				!settings.pathOpts.useCustomFileNameFormat
+			);
+			fileNameFormatSuffixSet?.settingEl.toggle(
+				!settings.pathOpts.useCustomFileNameFormat
+			);
+			refreshExportPreview();
 		};
 
-		nameFormatSet.setName("File name format");
-		nameFormatSet.addExtraButton((comp) => {
-			comp.setIcon("reset");
-			comp.onClick(() => {
-				settings.pathOpts.fileNameFormat = DEFAULT_FILE_NAME_FORMAT;
-				refershNameFormat();
-				refreshExportPreview();
+		const fileNameFormatSet = new Setting(containerEl);
+		fileNameFormatSet.setName("Use custom file name format");
+		fileNameFormatSet.addToggle((comp) => {
+			comp.onChange((value) => {
+				settings.pathOpts.useCustomFileNameFormat =
+					!settings.pathOpts.useCustomFileNameFormat;
+				refreshFileNameFormatSets();
 			});
-		});
-		nameFormatSet.addText((comp: TextComponent) => {
-			nameFormatSetComp = comp;
-			comp.inputEl.classList.add("imgk-wide-input");
-			comp.onChange((value: string) => {
-				settings.pathOpts.fileNameFormat = value;
-				refreshExportPreview();
-			});
-			refershNameFormat();
+
+			refreshFileNameFormatSets();
 		});
 
-		// exportDirAbsSet.settingEl.classList.add(ClsGroupMember);
-		// exportDirRelativeSet.settingEl.classList.add(ClsGroupMember);
-		// nameFormatSet.settingEl.classList.add(ClsGroupMember);
+		customFileNameFormatSet = new Setting(containerEl);
+		let customNameFormatSetComp: TextComponent;
+
+		const refreshCustomNameFormatState = () => {
+			if (settings.pathOpts.customFileNameFormat.trim().length < 1) {
+				customFileNameFormatSet.settingEl.addClass("imgk-warning");
+				customNameFormatSetComp?.inputEl.addClass("imgk-warning");
+			} else {
+				customFileNameFormatSet.settingEl.removeClass("imgk-warning");
+				customNameFormatSetComp?.inputEl.removeClass("imgk-warning");
+			}
+		};
+
+		const setCustomNameFormatControlValue = () => {
+			customNameFormatSetComp?.setValue(
+				settings.pathOpts.customFileNameFormat
+			);
+		};
+
+		customFileNameFormatSet.setName("File name format");
+		customFileNameFormatSet.addExtraButton((comp) => {
+			comp.setIcon("reset");
+			comp.onClick(() => {
+				settings.pathOpts.customFileNameFormat =
+					DEFAULT_FILE_NAME_FORMAT;
+				setCustomNameFormatControlValue();
+				refreshCustomNameFormatState();
+				refreshExportPreview();
+			});
+		});
+		customFileNameFormatSet.addText((comp: TextComponent) => {
+			customNameFormatSetComp = comp;
+			comp.inputEl.classList.add("imgk-wide-input");
+			comp.onChange((value: string) => {
+				settings.pathOpts.customFileNameFormat = value;
+				refreshExportPreview();
+				refreshCustomNameFormatState();
+			});
+			setCustomNameFormatControlValue();
+			refreshCustomNameFormatState();
+		});
+
+		let fileNamePrefixSetComp: TextComponent;
+		const setFileNamePrefixControlValue = () => {
+			fileNamePrefixSetComp?.setValue(
+				settings.pathOpts.fileNameFormatPrefix
+			);
+		};
+
+		fileNameFormatPrefixSet = new Setting(containerEl);
+		fileNameFormatPrefixSet.setName("Prefix");
+		fileNameFormatPrefixSet.addExtraButton((comp) => {
+			comp.setIcon("reset");
+			comp.onClick(() => {
+				settings.pathOpts.fileNameFormatPrefix =
+					DEFAULT_FILE_NAME_PREFIX;
+				setFileNamePrefixControlValue();
+				refreshExportPreview();
+			});
+		});
+		fileNameFormatPrefixSet.addText((comp: TextComponent) => {
+			fileNamePrefixSetComp = comp;
+			comp.onChange((value) => {
+				settings.pathOpts.fileNameFormatPrefix = value;
+				refreshExportPreview();
+			});
+			setFileNamePrefixControlValue();
+		});
+
+		let fileNameSuffixSetComp: TextComponent;
+		const setFileNameSuffixControlValue = () => {
+			fileNameSuffixSetComp?.setValue(
+				settings.pathOpts.fileNameFormatSuffix
+			);
+		};
+
+		fileNameFormatSuffixSet = new Setting(containerEl);
+		fileNameFormatSuffixSet.setName("Suffix");
+		fileNameFormatSuffixSet.addExtraButton((comp) => {
+			comp.setIcon("reset");
+			comp.onClick(() => {
+				settings.pathOpts.fileNameFormatSuffix =
+					DEFAULT_FILE_NAME_SUFFIX;
+				setFileNameSuffixControlValue();
+				refreshExportPreview();
+			});
+		});
+		fileNameFormatSuffixSet.addText((comp: TextComponent) => {
+			fileNameSuffixSetComp = comp;
+			comp.onChange((value) => {
+				settings.pathOpts.fileNameFormatSuffix = value;
+				refreshExportPreview();
+			});
+			setFileNameSuffixControlValue();
+		});
+
+		refreshFileNameFormatSets();
 
 		if (isInstantMode) {
 			customPathNameSet = new Setting(containerEl);
@@ -442,8 +627,11 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 			customPathSet.addText((comp: TextComponent) => {
 				customPathComp = comp;
 				comp.inputEl.classList.add("imgk-wide-input");
+				comp.onChange((_value) => {
+					onUpdate();
+				});
 			});
-			// customPathSet.settingEl.classList.add(ClsGroupMemberLast);
+			customPathSet.settingEl.classList.add(ClsGroupMemberLast);
 		} else {
 			exportPreviewSet = new Setting(containerEl);
 			exportPreviewSet.setName(textPreviewSettings);
@@ -457,32 +645,58 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 		}
 
 		refreshExportView();
+		return { refreshExportPreview, instantExportPathGetter };
 	}
 
 	static createFormatEditSets = <T extends Array<string>>(
 		containerEl: HTMLElement,
 		name: string,
 		desc: string,
+		placeHolder: string,
+		allowEmpty: boolean,
 		getter: () => T,
 		defaultGetter: () => T,
 		setter: (value: T) => void,
 		onChange: (value: string) => void
 	): {
-		setting: Setting;
+		setting: Setting[];
 	} => {
 		let sourceFormatsResetBtn: ExtraButtonComponent;
 		let sourceFormatsInputComp: TextAreaComponent;
+		let mainSet: Setting;
 
-		const refreshSourceFormats = () => {
-			sourceFormatsInputComp.setValue(getter().join(", "));
+		const refreshInputState = () => {
+			const value = getter();
+			if (!allowEmpty) {
+				if (value.length < 1) {
+					mainSet?.settingEl.addClass("imgk-warning");
+					sourceFormatsInputComp?.inputEl.addClass("imgk-warning");
+				} else {
+					mainSet?.settingEl.removeClass("imgk-warning");
+					sourceFormatsInputComp?.inputEl.removeClass("imgk-warning");
+				}
+			}
+		};
+
+		const setInputValue = () => {
+			const value = getter();
+			sourceFormatsInputComp.setValue(value.join(", "));
+			refreshInputState();
 		};
 		const resetSourecFormats = () => {
 			setter(cloneDeep(defaultGetter()));
-			refreshSourceFormats();
+			setInputValue();
 		};
 
-		const mainSet = new Setting(containerEl)
-			.setName(name)
+		mainSet = new Setting(containerEl).setName(name);
+
+		refreshInputState();
+		if (desc) {
+			mainSet.setDesc(desc);
+		}
+
+		const subSet = new Setting(containerEl);
+		subSet
 			.addExtraButton((comp: ExtraButtonComponent) => {
 				sourceFormatsResetBtn = comp;
 				comp.setIcon("reset").setTooltip("Reset");
@@ -492,25 +706,26 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 			})
 			.addTextArea((comp: TextAreaComponent) => {
 				sourceFormatsInputComp = comp;
+				comp.setPlaceholder(placeHolder);
 				comp.inputEl.classList.add("imgk-textarea");
 				comp.inputEl.addEventListener("blur", (evt) => {
-					refreshSourceFormats();
+					setInputValue();
 				});
-				refreshSourceFormats();
+				setInputValue();
+
 				comp.onChange((text: string) => {
 					replaceFileFormats(getter(), text);
 					onChange(text);
+					refreshInputState();
 				});
 			});
 
-		if (desc) {
-			mainSet.setDesc(desc);
-		}
-
+		subSet.settingEl.addClass("imgk-controls-only");
 		return {
-			setting: mainSet,
+			setting: [mainSet, subSet],
 		};
 	};
+
 	static createExportSets(
 		context: MainPluginContext,
 		containerEl: HTMLElement,
@@ -518,59 +733,32 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 		settings: ImgkExportSettings[],
 		srcFilePath?: string
 	) {
-		const autoExportName = "Auto export";
-		const autoExportSet = new Setting(containerEl).setDesc(
-			"Automatically export the images in the selected format when the original image is modified or created."
-		);
-
-		autoExportSet.addButton((comp: ButtonComponent) => {
-			comp.setIcon("plus-circle");
-			comp.onClick((evt) => {
+		const listController = this.createList(
+			"Entries",
+			"",
+			containerEl,
+			settings,
+			() => {
 				const newExportSettings = cloneDeep(DEFAULT_EXPORT_SETTINGS);
-				newExportSettings.pathOpts.sourceExts = cloneDeep(
-					pluginSettings.exportSourceExtsFilter
-				);
-				settings.push(newExportSettings);
-				refreshList();
-			});
-		});
-
-		const allListSets: Setting[] = [];
-		const listDiv = containerEl.createDiv({
-			cls: "imgk-custom-setting-item",
-		});
-		const refreshList = () => {
-			for (const setItem of allListSets) {
-				setItem.settingEl.remove();
-			}
-			allListSets.splice(0, allListSets.length);
-
-			if (settings.length > 0) {
-				autoExportSet.setName(autoExportName);
-			} else {
-				autoExportSet.setName(`${autoExportName} (empty)`);
-			}
-
-			settings.forEach((item, itemIndex) => {
-				const rowSet = this.createExportRow(
+				newExportSettings.name = "Auto export entry";
+				return newExportSettings;
+			},
+			(contEl, item, itemIndex) => {
+				return this.createExportRow(
 					context,
-					listDiv,
+					contEl,
 					pluginSettings,
 					item,
 					srcFilePath,
 					() => {
-						settings.splice(itemIndex, 1);
-						refreshList();
+						listController.removeItem(itemIndex);
 					},
 					() => {
-						refreshList();
+						listController.refresher();
 					}
 				);
-				allListSets.push(rowSet);
-			});
-		};
-
-		refreshList();
+			}
+		);
 	}
 
 	static createExportRow(
@@ -588,8 +776,13 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 		// autoExportEntrySet.settingEl.classList.add(ClsGroupMember);
 
 		const refreshRemoveComp = () => {
-			// removeComp.extraSettingsEl.disabled = settings.active;
-			removeComp.extraSettingsEl.toggleVisibility(!settings.active);
+			if (settings.active) {
+				removeComp.extraSettingsEl.classList.add("imgk-disabled");
+			} else {
+				removeComp.extraSettingsEl.classList.remove("imgk-disabled");
+			}
+
+			// removeComp.extraSettingsEl.toggleVisibility(!settings.active);
 		};
 
 		const refreshName = () => {
@@ -625,7 +818,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 
 		autoExportEntrySet.addExtraButton((comp: ExtraButtonComponent) => {
 			removeComp = comp;
-			comp.setIcon("x-circle");
+			comp.setIcon("trash-2");
 			comp.onClick(() => {
 				if (onRemoveAttempt) {
 					onRemoveAttempt();
@@ -640,13 +833,14 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 	static createExportImagePropsSet(
 		context: MainPluginContext,
 		containerEl: HTMLElement,
-		settings: ImgkExportSettings
+		settings: ImgkExportSettings,
+		onUpdate: () => void
 	) {
 		const imagePropsSet = new Setting(containerEl);
-		imagePropsSet.setName("Export image settings");
+		imagePropsSet.setName("Image options");
 		imagePropsSet.setHeading();
 
-		const formatSet = new Setting(containerEl)
+		const exportFormatSet = new Setting(containerEl)
 			.setName("Format")
 			.addDropdown((comp: DropdownComponent) => {
 				for (const fm of exportFormatList) {
@@ -661,24 +855,25 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 					if (newFormat) {
 						settings.format = cloneDeep(newFormat);
 					}
+					onUpdate();
 				});
 			});
 
 		// formatSet.settingEl.classList.add(ClsGroupMember);
 
-		let imagePropSets: Setting[] = [];
 		let qualitySet: Setting;
 		let qualityDisplayEl: HTMLElement | undefined;
 
 		const refreshQualityDisplay = () => {
 			if (qualityDisplayEl) {
 				const q = settings.imgProps.quality ?? 1;
-				qualityDisplayEl.textContent = `${q * 100}%`;
+				qualityDisplayEl.setText(`${q * 100}%`);
 			}
 		};
 
 		qualitySet = new Setting(containerEl);
 		qualitySet.addSlider((comp: SliderComponent) => {
+			comp.setValue(settings.imgProps.quality);
 			comp.setLimits(0, 1, 0.1);
 			comp.onChange((value) => {
 				settings.imgProps.quality = Math.clamp(value, 0, 1);
@@ -692,47 +887,23 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 		qualitySet.setName("Quality");
 		// qualitySet.settingEl.classList.add(ClsGroupMember);
 
-		const listHeadName = "Adjustments to image size";
-		const listHeadSet = new Setting(containerEl);
-		listHeadSet.addButton((comp: ButtonComponent) => {
-			comp.setIcon("plus-circle");
-			comp.onClick((evt) => {
-				if (settings.imgProps.sizeAdjustments === undefined) {
-					settings.imgProps.sizeAdjustments = [];
-				}
-				settings.imgProps.sizeAdjustments.push({
+		const listController = this.createList(
+			"Adjustments to image size",
+			"",
+			containerEl,
+			settings.imgProps.sizeAdjustments,
+			() => {
+				return {
 					type: ImgkSizeAdjustType.Fixed,
+				};
+			},
+			(contEl, item, itemIndex) => {
+				return this.genSizeSets(contEl, item, () => {
+					listController.removeItem(itemIndex);
 				});
-
-				refreshList();
-			});
-		});
-
-		const listDiv = containerEl.createDiv({
-			cls: "imgk-custom-setting-item",
-		});
-		const refreshList = () => {
-			for (const propSet of imagePropSets) {
-				propSet.settingEl.remove();
 			}
-			imagePropSets.splice(0, imagePropSets.length);
+		);
 
-			if (settings.imgProps.sizeAdjustments.length > 0) {
-				listHeadSet.setName(listHeadName);
-			} else {
-				listHeadSet.setName(`${listHeadName} (empty)`);
-			}
-
-			settings.imgProps.sizeAdjustments?.forEach((item, itemIndex) => {
-				const adjustSet = this.genSizeSets(listDiv, item, () => {
-					settings.imgProps.sizeAdjustments?.splice(itemIndex, 1);
-					refreshList();
-				});
-				imagePropSets.push(adjustSet);
-			});
-		};
-
-		refreshList();
 		refreshQualityDisplay();
 	}
 
@@ -800,7 +971,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 		});
 
 		sizeSet.addExtraButton((comp: ExtraButtonComponent) => {
-			comp.setIcon("x-circle");
+			comp.setIcon("trash-2");
 			comp.onClick(onRemoveAttempt);
 		});
 
@@ -821,10 +992,12 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 		let flagsCompForText: ButtonComponent;
 		const refreshFlagsView = () => {
 			flagsCompForRegex?.inputEl.toggle(
-				settings.type === ImgkTextFilterType.Regex
+				settings.type === ImgkFileFilterType.RegexMatch ||
+					settings.type === ImgkFileFilterType.RegexNonMatch
 			);
 			flagsCompForText?.buttonEl.toggle(
-				settings.type === ImgkTextFilterType.PlainText
+				settings.type === ImgkFileFilterType.Includes ||
+					settings.type === ImgkFileFilterType.Excludes
 			);
 			if (settings.flags.contains("i")) {
 				flagsCompForText?.buttonEl.classList.add("imgk-toggle-off");
@@ -839,23 +1012,32 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 
 		mainSet.addDropdown((comp) => {
 			const allValues = [
-				ImgkTextFilterType.PlainText,
-				ImgkTextFilterType.Regex,
+				ImgkFileFilterType.Includes,
+				ImgkFileFilterType.RegexMatch,
 			];
 
 			comp.addOption(
-				ImgkTextFilterType.PlainText.toString(),
-				"Plain text"
+				ImgkFileFilterType.Includes.toString(),
+				"Contains text"
 			);
 
 			comp.addOption(
-				ImgkTextFilterType.Regex.toString(),
-				"Regular expression"
+				ImgkFileFilterType.Excludes.toString(),
+				"Excludes text"
+			);
+
+			comp.addOption(
+				ImgkFileFilterType.RegexMatch.toString(),
+				"Regular expression (match)"
+			);
+			comp.addOption(
+				ImgkFileFilterType.RegexNonMatch.toString(),
+				"Regular expression (non-match)"
 			);
 
 			comp.setValue(settings.type.toString());
 			comp.onChange((value: string) => {
-				const valueNum = Number(value) as ImgkTextFilterType;
+				const valueNum = Number(value) as ImgkFileFilterType;
 				settings.type = valueNum;
 				updateRegexFlags();
 				refreshFlagsView();
@@ -896,7 +1078,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 		});
 
 		mainSet.addExtraButton((comp: ExtraButtonComponent) => {
-			comp.setIcon("x-circle");
+			comp.setIcon("trash-2");
 			comp.onClick(() => {
 				if (onRemoveAttempt) {
 					onRemoveAttempt();
@@ -909,4 +1091,63 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 		// sizeSet.settingEl.classList.add(ClsGroupMemberLast);
 		return mainSet;
 	}
+
+	static createListDiv = (containerEl: HTMLElement) => {
+		return containerEl.createDiv({
+			cls: "imgk-custom-setting-item",
+		});
+	};
+	static createList = <T>(
+		name: string,
+		desc: string,
+		containerEl: HTMLElement,
+		list: Array<T>,
+		createNew: () => T,
+		createRow: (containerEl: HTMLElement, item: T, index: number) => Setting
+	): { refresher: Function; removeItem: (itemIndex: number) => void } => {
+		const mainSet = new Setting(containerEl);
+		if (desc.length > 0) {
+			mainSet.setDesc(desc);
+		}
+
+		mainSet.addButton((comp: ButtonComponent) => {
+			comp.setIcon("plus-circle");
+			comp.onClick((evt) => {
+				list.push(createNew());
+				refreshList();
+			});
+		});
+
+		const allListSets: Setting[] = [];
+		const listDiv = this.createListDiv(containerEl);
+
+		const refreshList = () => {
+			for (const setItem of allListSets) {
+				setItem.settingEl.remove();
+			}
+			allListSets.splice(0, allListSets.length);
+
+			if (list.length > 0) {
+				mainSet.setName(name);
+			} else {
+				mainSet.setName(`${name} (empty)`);
+			}
+
+			list.forEach((item, itemIndex) => {
+				const rowSet = createRow(listDiv, item, itemIndex);
+				allListSets.push(rowSet);
+			});
+		};
+
+		const removeItem = (index: number) => {
+			list.splice(index, 1);
+			refreshList();
+		};
+		refreshList();
+
+		return {
+			refresher: refreshList,
+			removeItem: removeItem,
+		};
+	};
 }

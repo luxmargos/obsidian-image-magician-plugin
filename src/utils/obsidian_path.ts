@@ -1,4 +1,5 @@
 import { normalizePath } from "obsidian";
+import { dirname } from "path";
 import * as pb from "path-browserify";
 
 export const normalizeObsidianDir = (path: string) => {
@@ -14,4 +15,12 @@ export const lowerCasedExtNameWithoutDot = (path: string) => {
 	const ext = pb.extname(path).toLowerCase();
 	const extWithoutDot = ext.startsWith(".") ? ext.substring(1) : ext;
 	return extWithoutDot;
+};
+
+export const nonDotDirName = (path: string) => {
+	const dirName = pb.dirname(path);
+	if (dirName === ".") {
+		return "";
+	}
+	return dirName;
 };

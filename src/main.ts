@@ -23,6 +23,8 @@ import { getMarkdownPostProcessor } from "./editor_ext/post_processor";
 import { Magick } from "@imagemagick/magick-wasm";
 import { ImgkPluginSettingsDialog } from "./dialogs/plugin_settings_dialog";
 import { PluginName } from "./consts/main";
+import { debug, info, log, setDefaultLevel, setLevel } from "loglevel";
+import { error } from "console";
 
 export default class ImgMagicianPlugin extends MainPlugin {
 	settings: ImgkPluginSettings;
@@ -35,7 +37,7 @@ export default class ImgMagicianPlugin extends MainPlugin {
 				await this.saveSettings(newSettings);
 				await this.cleanup();
 				await this.postInit();
-				this.vaultHandler.fullScan();
+				this.vaultHandler.fullScan(false);
 
 				resolve();
 			} catch (err) {
@@ -80,24 +82,33 @@ export default class ImgMagicianPlugin extends MainPlugin {
 		});
 	}
 
+	private logImageMagickVersion() {
+		info(Magick.imageMagickVersion);
+	}
+	private dumpImageMagickFormats() {
+		let listStr: string = "";
+		for (const fm of Magick.supportedFormats) {
+			if (fm.supportsReading) {
+				listStr += `|${fm.format}|${fm.description}||\n`;
+			}
+		}
+		debug(listStr);
+	}
 	async onload() {
+		// setDefaultLevel("DEBUG");
+		// setDefaultLevel("INFO");
+		// setLevel("INFO");
+		setLevel("DEBUG");
+
 		if (!PIE._magick) {
 			// initialize magick engine
 			try {
 				await loadImageMagick();
-
-				console.log(Magick.imageMagickVersion);
-
-				// let listStr: string = "";
-				// for (const fm of Magick.supportedFormats) {
-				// 	if (fm.supportsReading) {
-				// 		listStr += `|${fm.format}|${fm.description}||\n`;
-				// 	}
-				// }
-				// console.log(listStr);
+				this.logImageMagickVersion();
+				// this.dumpImageMagickFormats();
 				PIE._magick = new magick.PluginMagickEngine();
 			} catch (e) {
-				console.log(e);
+				info(e);
 			}
 		}
 
@@ -126,7 +137,7 @@ export default class ImgMagicianPlugin extends MainPlugin {
 		// Using the onLayoutReady event will help to avoid massive vault.on('create') event on startup.
 		this.app.workspace.onLayoutReady(() => {
 			this.vaultHandler = new VaultHandler(this.context);
-			this.vaultHandler.fullScan();
+			this.vaultHandler.fullScan(false);
 		});
 
 		await this.postInit();
@@ -202,13 +213,6 @@ export default class ImgMagicianPlugin extends MainPlugin {
 			);
 			errorDialog.open();
 		}
-
-		console.log(
-			this.passedExts,
-			newPassedExts,
-			this.failedExts,
-			newFailedExts
-		);
 	}
 
 	private handleOnLayoutReady() {
@@ -242,7 +246,7 @@ export default class ImgMagicianPlugin extends MainPlugin {
 			this.registerEvent(
 				//@ts-ignore
 				this.app.workspace.on("hover-link", (_e: any) => {
-					console.log("hover-link", _e);
+					debug("hover-link", _e);
 				})
 			);
 
@@ -268,12 +272,6 @@ export default class ImgMagicianPlugin extends MainPlugin {
 			await this.loadData()
 		);
 		this.settingsUtil = new SettingsUtil(this.settings);
-
-		// console.log(
-		// 	"loadSettings : ",
-		// 	this.settings,
-		// 	this.settingsUtil.getSupportedFormats()
-		// );
 	}
 
 	async saveSettings(newSettings: ImgkPluginSettings) {

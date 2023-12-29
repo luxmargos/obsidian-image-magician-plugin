@@ -2,9 +2,9 @@ import Psd from "@webtoon/psd";
 import { asTFile, asTFileOrThrow, findValutFile } from "../../vault_util";
 import { TFile } from "obsidian";
 import {
+	ExportDstInfo,
 	PluginImageEngine,
 	exportCanvasWithBlob,
-	resolveExportDstInfo,
 } from "../imgEngine";
 import { MainPluginContext } from "../../context";
 import { ImgkExportSettings, ImgkSize } from "../../settings/settings";
@@ -23,15 +23,9 @@ export class PluginPsdEngine implements PluginImageEngine {
 		imageAdjFunc?: ImageAdjFunc
 	): Promise<HTMLCanvasElement> {
 		return new Promise(async (resolve, reject) => {
-			let cv: HTMLCanvasElement | null = el.querySelector(
-				"canvas.imgk-plugin-item"
-			);
-			if (!cv) {
-				cv = el.createEl("canvas", { cls: "imgk-plugin-item" });
-				console.log("create canvas element");
-			} else {
-				console.log("reuse canvas element");
-			}
+			const cv: HTMLCanvasElement = el.createEl("canvas", {
+				cls: "imgk-plugin-export-canvas",
+			});
 
 			try {
 				await this.drawOnCanvas(context, imgFile, cv, imageAdjFunc);
@@ -107,17 +101,13 @@ export class PluginPsdEngine implements PluginImageEngine {
 		context: MainPluginContext,
 		sourceFile: TFile,
 		settings: ImgkRuntimeExportSettings,
-		refElement: HTMLElement
-	): Promise<void> {
-		return new Promise<void>(async (resolve, reject) => {
-			const exportDstInfo = resolveExportDstInfo(
-				context,
-				sourceFile,
-				settings.data
-			);
-
-			if (exportDstInfo.isLatest) {
-				resolve();
+		refElement: HTMLElement,
+		forcedExport: boolean,
+		exportDstInfo: ExportDstInfo
+	): Promise<string> {
+		return new Promise<string>(async (resolve, reject) => {
+			if (!forcedExport && exportDstInfo.isLatest) {
+				resolve(exportDstInfo.path);
 				return;
 			}
 
@@ -126,7 +116,8 @@ export class PluginPsdEngine implements PluginImageEngine {
 				canvasElement = await this.draw(
 					context,
 					sourceFile,
-					refElement
+					refElement,
+					settings.imageAdjFunc
 				);
 
 				await exportCanvasWithBlob(
@@ -138,7 +129,7 @@ export class PluginPsdEngine implements PluginImageEngine {
 					exportDstInfo.file
 				);
 				canvasElement.remove();
-				resolve();
+				resolve(exportDstInfo.path);
 			} catch (e) {
 				canvasElement?.remove();
 				reject(e);

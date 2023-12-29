@@ -2,13 +2,14 @@ import { MarkdownPostProcessorContext } from "obsidian";
 import { MainPluginContext } from "../context";
 import { linkedImgHandler, normalImgHandler } from "./img_post_processor";
 import { ImgkMutationObserver } from "./mutation_ob";
+import { debug } from "loglevel";
 
 export const getMarkdownPostProcessor = (context: MainPluginContext) => {
 	const postProcessor = async (
 		el: HTMLElement,
 		ctx: MarkdownPostProcessorContext
 	) => {
-		console.log("===========================getMarkdownPostProcessor");
+		debug("===========================getMarkdownPostProcessor");
 
 		const processor = () => {
 			normalImgHandler(context, el);

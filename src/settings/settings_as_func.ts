@@ -4,12 +4,17 @@ import {
 	ImgkExportSettings,
 	ImgkImageSize,
 	ImgkPluginSettings,
-	ImgkTextFilter,
-	ImgkTextFilterType,
+	ImgkFileFilter,
+	ImgkFileFilterType,
 	ImgkSize,
+	ImgkTextFilter,
 } from "./settings";
-import { lowerCasedExtNameWithoutDot } from "src/utils/obsidian_path";
+import {
+	lowerCasedExtNameWithoutDot,
+	nonDotDirName,
+} from "src/utils/obsidian_path";
 import { cloneDeep } from "lodash-es";
+import * as pb from "path-browserify";
 
 const resolveSizeNum = (num?: number): number | undefined => {
 	if (num === undefined) {
@@ -53,9 +58,29 @@ export type ImgkRuntimeExportSettings = {
 	exportSourceFilterFunc: (fileOrPath: TFile | string) => boolean;
 };
 
+export const convertAllExportSettingsToRuntime = (
+	pluginSetings: ImgkPluginSettings
+): ImgkRuntimeExportSettings[] => {
+	const result = [];
+	const allExtSet: Set<string> = new Set();
+
+	for (const autoExport of pluginSetings.autoExportList) {
+		if (!autoExport.active) {
+			continue;
+		}
+
+		result.push(
+			convertExportSettingsToRuntime(pluginSetings, autoExport, allExtSet)
+		);
+	}
+
+	return result;
+};
+
 export const convertExportSettingsToRuntime = (
 	pluginSetings: ImgkPluginSettings,
-	settings: ImgkExportSettings
+	settings: ImgkExportSettings,
+	allExtSet: Set<string>
 ): ImgkRuntimeExportSettings => {
 	const sideAdjFuncs: SizeAdjFunc[] = [];
 	const imageAdjFunc = (size: ImgkSize): ImageAdj => {
@@ -90,6 +115,21 @@ export const convertExportSettingsToRuntime = (
 	};
 
 	const sourceFilterFuncs: PathFilterFunc[] = [];
+
+	let extFilter: string[] = settings.pathOpts.sourceExts;
+
+	const extSet: Set<string> = new Set();
+	extFilter.forEach((value) => {
+		const lowerExt = value.toLowerCase();
+		const upperExt = value.toUpperCase();
+		extSet.add(lowerExt);
+		extSet.add(upperExt);
+		// allExtSetWithDot.add(`.${lowerExt}`);
+		// allExtSetWithDot.add(`.${upperExt}`);
+		allExtSet.add(lowerExt);
+		allExtSet.add(upperExt);
+	});
+
 	const exportSourceFilterFunc = (fileOrPath: TFile | string): boolean => {
 		let path: string;
 
@@ -101,21 +141,20 @@ export const convertExportSettingsToRuntime = (
 
 		const ext = lowerCasedExtNameWithoutDot(path);
 
-		if (
-			settings.pathOpts.sourceDir.length > 0 &&
-			!path.startsWith(settings.pathOpts.sourceDir)
-		) {
-			return false;
-		}
-
-		let extFilter: string[] = [];
-		if (settings.pathOpts.useDefaultExtFilter) {
-			extFilter = pluginSetings.exportSourceExtsFilter;
+		const sourceDir = settings.pathOpts.sourceDir;
+		const normalizedSourceDir = normalizePath(sourceDir);
+		if (settings.pathOpts.recursiveSources) {
+			if (sourceDir.length > 0 && !path.startsWith(sourceDir)) {
+				return false;
+			}
 		} else {
-			extFilter = settings.pathOpts.sourceExts;
+			const pathDir = normalizePath(nonDotDirName(path));
+			if (normalizedSourceDir !== pathDir) {
+				return false;
+			}
 		}
 
-		if (!extFilter.includes(ext)) {
+		if (!extSet.has(ext)) {
 			return false;
 		}
 
@@ -133,7 +172,18 @@ export const convertExportSettingsToRuntime = (
 		sideAdjFuncs.push(exportSizeAdjAsFunc(sizeAdj));
 	}
 
+	for (const filter of settings.pathOpts.builtInSourceFilters) {
+		if (!filter.active) {
+			continue;
+		}
+		sourceFilterFuncs.push(
+			exportBuiltInSourceFilterAsFunc(filter, allExtSet)
+		);
+	}
 	for (const filter of settings.pathOpts.sourceFilters) {
+		if (!filter.active) {
+			continue;
+		}
 		sourceFilterFuncs.push(exportSourceFilterAsFunc(filter));
 	}
 
@@ -250,24 +300,66 @@ export const exportSizeAdjAsFunc = (sizeAdj: ImgkImageSize): SizeAdjFunc => {
 
 export type PathFilterFunc = (path: string) => boolean;
 
-export const exportSourceFilterAsFunc = (
-	filter: ImgkTextFilter
+const exportBuiltInSourceFilterAsFunc = (
+	filter: ImgkFileFilter,
+	extSet: Set<string>
 ): PathFilterFunc => {
-	if (filter.type === ImgkTextFilterType.PlainText) {
-		if (filter.flags.includes("i") || filter.flags.includes("I")) {
-			const lowerCasedContent = filter.content.toLowerCase();
-			return (path: string) => {
-				return path.toLowerCase().includes(lowerCasedContent);
-			};
-		}
-
-		const content = filter.content;
+	if (filter.type === ImgkFileFilterType.DoubleExtsBlocker) {
+		// Block export if the filename has at least two extensions, e.g., 'my_image.psd.exported.png', 'my_image.png.exported.png'.
 		return (path: string) => {
-			return path.includes(content);
+			const fileName = pb.basename(path);
+			const fileNameComps = fileName.split(".");
+			let matchCount = 0;
+			for (const comp of fileNameComps) {
+				if (extSet.has(comp)) {
+					matchCount += 1;
+				}
+
+				if (matchCount >= 2) {
+					return false;
+				}
+			}
+			return true;
 		};
 	}
 
-	if (filter.type === ImgkTextFilterType.Regex) {
+	return (path: string) => true;
+};
+
+const exportSourceFilterAsFunc = (filter: ImgkTextFilter): PathFilterFunc => {
+	if (
+		filter.type === ImgkFileFilterType.Includes ||
+		filter.type === ImgkFileFilterType.Excludes
+	) {
+		if (filter.flags.includes("i") || filter.flags.includes("I")) {
+			const lowerCasedContent = filter.content.toLowerCase();
+			if (filter.type === ImgkFileFilterType.Includes) {
+				return (path: string) => {
+					return path.toLowerCase().includes(lowerCasedContent);
+				};
+			} else {
+				return (path: string) => {
+					return !path.toLowerCase().includes(lowerCasedContent);
+				};
+			}
+		}
+
+		const content = filter.content;
+		if (filter.type === ImgkFileFilterType.Includes) {
+			return (path: string) => {
+				return path.includes(content);
+			};
+		} else {
+			return (path: string) => {
+				return !path.includes(content);
+			};
+		}
+	}
+
+	if (
+		filter.type === ImgkFileFilterType.RegexMatch ||
+		filter.type === ImgkFileFilterType.RegexNonMatch
+	) {
 		let regex: RegExp | undefined;
 		try {
 			regex = new RegExp(filter.content, filter.flags);
@@ -281,9 +373,15 @@ export const exportSourceFilterAsFunc = (
 
 		if (regex) {
 			const reqRegex = regex;
-			return (path: string) => {
-				return reqRegex.test(path);
-			};
+			if (filter.type === ImgkFileFilterType.RegexMatch) {
+				return (path: string) => {
+					return reqRegex.test(path);
+				};
+			} else {
+				return (path: string) => {
+					return !reqRegex.test(path);
+				};
+			}
 		}
 
 		return (path: string) => true;

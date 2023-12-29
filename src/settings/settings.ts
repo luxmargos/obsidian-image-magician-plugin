@@ -1,11 +1,11 @@
 import { cloneDeep, size } from "lodash-es";
-import { ExportFormat } from "../exporter";
+import { ExportFormat } from "../export_settings";
 import { satisfies } from "compare-versions";
 import { TAbstractFile, TFile, apiVersion } from "obsidian";
 import { WARN_LIST_1_5_3, WARN_LIST_OLD } from "./obsidian_formats";
 import {
 	ImgkRuntimeExportSettings,
-	convertExportSettingsToRuntime,
+	convertAllExportSettingsToRuntime,
 } from "./settings_as_func";
 import { isTFile } from "src/vault_util";
 
@@ -16,28 +16,41 @@ export enum ImgkSizeAdjustType {
 	Maximum = 3,
 }
 
-export enum ImgkTextFilterType {
-	PlainText = 0,
-	Regex = 1,
+export enum ImgkFileFilterType {
+	Includes = 0,
+	Excludes = 1,
+	RegexMatch = 2,
+	RegexNonMatch = 3,
+	DoubleExtsBlocker = 4,
 }
 
-export interface ImgkTextFilter {
-	type: ImgkTextFilterType;
+export interface ImgkFileFilter {
+	active: boolean;
+	type: ImgkFileFilterType;
+}
+
+export interface ImgkTextFilter extends ImgkFileFilter {
 	content: string;
 	flags: string;
+	isReversed: boolean;
 }
 
 export type ImgkSize = { x: number; y: number };
 
 export interface ImgkExportPath {
 	sourceDir: string;
-	useDefaultExtFilter: boolean;
+	recursiveSources: boolean;
 	sourceExts: string[];
 	sourceFilters: ImgkTextFilter[];
+	useBuiltInSourceFilters: boolean;
+	builtInSourceFilters: ImgkFileFilter[];
 	asRelativePath: boolean;
 	exportDirAbs: string;
 	exportDirRel: string;
-	fileNameFormat: string;
+	useCustomFileNameFormat: boolean;
+	fileNameFormatPrefix: string;
+	fileNameFormatSuffix: string;
+	customFileNameFormat: string;
 }
 
 export interface ImgkImageSize {
@@ -88,33 +101,25 @@ export const getDefaultSupportedFormats = () => {
 	];
 };
 
-export const DEFAULT_EXPORT_FORMATS = [
-	"psd",
-	"xcf",
-	"tif",
-	"tiff",
-	"dcm",
-	"dds",
-	"hdr",
-	"heic",
-	"mng",
-	"pbm",
-	"pcx",
-	"pfm",
-	"pgm",
-	"pnm",
-	"ppm",
-	"sgi",
-	"xbm",
-	// "avif",
-	// "jpg",
-	// "png",
-	// "webp",
-];
+export const DEFAULT_FILE_NAME_PREFIX = "";
+export const DEFAULT_FILE_NAME_SUFFIX = "export";
 
-export const DEFAULT_FILE_NAME_FORMAT = "${name}.${ext}.exported.${dst_ext}";
+export const buildFileNameFormat = (prefix: string, suffix: string) => {
+	return (
+		(prefix ? `${prefix}.` : "") +
+		"${name}.${ext}" +
+		(suffix ? `.${suffix}` : "") +
+		".${dst_ext}"
+	);
+};
+
+export const DEFAULT_FILE_NAME_FORMAT = buildFileNameFormat(
+	DEFAULT_FILE_NAME_PREFIX,
+	DEFAULT_FILE_NAME_SUFFIX
+);
+
 export const DEFAULT_EXPORT_SETTINGS: ImgkExportSettings = {
-	name: "Auto export entry",
+	name: "",
 	active: false,
 	format: {
 		ext: "png",
@@ -127,13 +132,20 @@ export const DEFAULT_EXPORT_SETTINGS: ImgkExportSettings = {
 	},
 	pathOpts: {
 		sourceDir: "",
-		useDefaultExtFilter: true,
+		recursiveSources: false,
+		useBuiltInSourceFilters: true,
+		builtInSourceFilters: [
+			{ active: true, type: ImgkFileFilterType.DoubleExtsBlocker },
+		],
 		sourceExts: [],
 		sourceFilters: [],
 		asRelativePath: false,
 		exportDirAbs: "Exported Images",
 		exportDirRel: "",
-		fileNameFormat: DEFAULT_FILE_NAME_FORMAT,
+		useCustomFileNameFormat: false,
+		fileNameFormatPrefix: DEFAULT_FILE_NAME_PREFIX,
+		fileNameFormatSuffix: DEFAULT_FILE_NAME_SUFFIX,
+		customFileNameFormat: DEFAULT_FILE_NAME_FORMAT,
 	},
 };
 
@@ -141,12 +153,14 @@ export const DEFAULT_EXPORT_SETTINGS: ImgkExportSettings = {
 export interface ImgkPluginSettings {
 	supportedFormats: string[];
 
-	exportSourceExtsFilter: string[];
 	autoExportList: ImgkExportSettings[];
 	instantExport: ImgkExportSettings;
 
 	supportAutoImgSrcLink: boolean;
 	viewTreatVerticalOverflow: boolean;
+
+	trackRename: boolean;
+	trackDelete: boolean;
 
 	/**
 	 * Base features
@@ -169,7 +183,6 @@ export const getWarnList = () => {
 export const DEFAULT_SETTINGS: ImgkPluginSettings = {
 	supportedFormats: getDefaultSupportedFormats(),
 
-	exportSourceExtsFilter: DEFAULT_EXPORT_FORMATS,
 	autoExportList: [],
 	instantExport: cloneDeep(DEFAULT_EXPORT_SETTINGS),
 
@@ -180,6 +193,9 @@ export const DEFAULT_SETTINGS: ImgkPluginSettings = {
 	supportMdImageSizeFormat: true,
 	disbleClickToNavigate: true,
 	previewImgTag: true,
+
+	trackRename: true,
+	trackDelete: true,
 };
 
 export class SettingsUtil {
@@ -226,16 +242,9 @@ export class SettingsUtil {
 
 	generateRuntimeAutoExports = () => {
 		this.runtimeAutoExports.splice(0, this.runtimeAutoExports.length);
-
-		for (const autoExport of this.settings.autoExportList) {
-			if (!autoExport.active) {
-				continue;
-			}
-
-			this.runtimeAutoExports.push(
-				convertExportSettingsToRuntime(this.settings, autoExport)
-			);
-		}
+		this.runtimeAutoExports = convertAllExportSettingsToRuntime(
+			this.settings
+		);
 	};
 
 	findRuntimeAutoExports = (file: TAbstractFile) => {

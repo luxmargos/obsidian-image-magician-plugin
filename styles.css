@@ -7,6 +7,14 @@ If your plugin does not need CSS, delete this file.
 
 */
 
+.imgk-plugin-export-canvas {
+	pointer-events: none;
+	opacity: 0;
+	position: fixed;
+	top: 0px;
+	left: 0px;
+}
+
 canvas.imgk-plugin-item:not([width]) {
 	max-width: 100%;
 }
@@ -60,13 +68,14 @@ img.imgk-plugin-item:not([width]) {
 .imgk-plugin-overlay {
 	/* position: fixed; */
 	position: absolute;
-	display: block;
+	/* display: block; */
+	display: inline-block;
 	left: 0;
 	top: 0;
 	cursor: pointer;
 
-	/* background-color: red;
-	opacity: 0.8; */
+	background-color: red;
+	opacity: 0.8;
 
 	/* right: 0; */
 	/* bottom: 0; */
@@ -75,8 +84,12 @@ img.imgk-plugin-item:not([width]) {
 .setting-item .setting-item-control .imgk-textarea {
 	flex-grow: 1;
 	/* min-height: 100px; */
-	height: 100px;
-	min-width: 300px;
+	/* height: 100px; */
+	/* min-width: 300px; */
+}
+
+.setting-item .setting-item-control .imgk-warning {
+	border-color: var(--text-warning);
 }
 
 .setting-item .imgk-settings-quality {
@@ -146,8 +159,13 @@ img.imgk-plugin-item:not([width]) {
 } */
 
 .imgk-custom-setting-item:has(.setting-item) {
+	/* display: block; */
 	padding: 0.75em 0;
-	border-top: 1px solid var(--background-modifier-border);
+	border-top: 0px solid var(--background-modifier-border);
+}
+
+.imgk-custom-setting-item .setting-item {
+	border-top: 0px;
 }
 
 .setting-item .imgk-toggle-off {
@@ -160,5 +178,10 @@ img.imgk-plugin-item:not([width]) {
 
 .imgk-export-supporter {
 	opacity: 0;
+	pointer-events: none;
+}
+
+.imgk-disabled {
+	opacity: 0.3;
 	pointer-events: none;
 }

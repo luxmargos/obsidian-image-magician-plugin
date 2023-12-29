@@ -23,6 +23,8 @@ import { PIE } from "../engines/imgEngines";
 
 import { ImgkMutationObserver } from "./mutation_ob";
 import { lowerCasedExtNameWithoutDot } from "../utils/obsidian_path";
+import { debug } from "loglevel";
+import { uniqueId } from "lodash-es";
 
 export function normalImgHandler(
 	context: MainPluginContext,
@@ -60,12 +62,8 @@ export function normalImgHandler(
 
 		let srcFile: TFile | undefined | null;
 
-		const qIndex = src.lastIndexOf("?");
-		let fullResPath = src;
-		if (qIndex >= 0) {
-			fullResPath = src.substring(0, qIndex);
-		}
-
+		const srcUrl = new URL(src);
+		let fullResPath = decodeURIComponent(srcUrl.pathname);
 		const ext = lowerCasedExtNameWithoutDot(fullResPath);
 		if (ext.length < 1) {
 			continue;
@@ -87,6 +85,7 @@ export function normalImgHandler(
 				valutRelativePath = valutRelativePath.substring(1);
 			}
 
+			console.log("valutRelativePath", valutRelativePath);
 			srcFile = findValutFile(context, valutRelativePath, true);
 		}
 
@@ -105,11 +104,18 @@ export function normalImgHandler(
 		let draw = !isLatestImgDrawnElement(imgEl, srcFile);
 
 		if (!draw) {
-			console.log("pass redrawing");
+			debug("pass redrawing");
 			continue;
 		}
 
-		drawImageOnElement(context, imgElParent, imgEl, srcFile, observer);
+		const cacheString = createCacheString(srcFile);
+		if (cacheString in imgCaches) {
+			imgEl.src = imgCaches[cacheString];
+			console.log("reuse cache");
+		} else {
+			drawImageOnElement(context, imgElParent, imgEl, srcFile, observer);
+		}
+		attachImgFollower(context, imgEl, srcFile, observer);
 	}
 }
 
@@ -182,10 +188,6 @@ export function linkedImgHandler(
 			);
 		}
 
-		// console.log("posAtDom ", cmView?.posAtDOM(internalEmbed));
-		// console.log("found file : ", srcFile.path);
-		// console.log(internalEmbed);
-
 		let draw = true;
 		if (img) {
 			draw = !isLatestImgDrawnElement(img, srcFile);
@@ -208,12 +210,9 @@ export function linkedImgHandler(
 
 		const titleNode = internalEmbed.querySelector(".file-embed-title");
 		if (titleNode && titleNode instanceof HTMLElement) {
-			// console.log("hide titleNode");
-			// titleNode.style.display = "none";
 			titleNode.style.height = "0px";
 			titleNode.style.opacity = "0";
 			titleNode.style.pointerEvents = "none";
-			// internalEmbed.replaceChild(img, titleNode);
 		}
 
 		// disable navigate to file on click
@@ -237,7 +236,14 @@ export function linkedImgHandler(
 		internalEmbed.classList.add("image-embed");
 		internalEmbed.classList.add("media-embed");
 
-		drawImageOnElement(context, internalEmbed, img, srcFile, observer);
+		const cacheString = createCacheString(srcFile);
+		if (cacheString in imgCaches) {
+			img.src = imgCaches[cacheString];
+			console.log("reuse cache");
+		} else {
+			drawImageOnElement(context, internalEmbed, img, srcFile, observer);
+		}
+		attachImgFollower(context, img, srcFile, observer);
 	}
 }
 
@@ -258,6 +264,11 @@ export function applyContainerMdSize(
 		targetElement.removeAttribute("width");
 	}
 }
+
+const imgCaches: Record<string, string> = {};
+const createCacheString = (file: TFile) => {
+	return `${file.path}_${file.stat.mtime}`;
+};
 
 export function drawImageOnElement(
 	context: MainPluginContext,
@@ -280,8 +291,6 @@ export function drawImageOnElement(
 		});
 	}
 
-	// internalEmbed.empty();
-	// internalEmbed.innerHTML = "FOUND : " + srcFile.path;
 	PIE.magick()
 		.drawOnCanvas(context, targetFile, cv)
 		.then(() => {
@@ -289,6 +298,8 @@ export function drawImageOnElement(
 				if (blob) {
 					const burl = URL.createObjectURL(blob);
 					img!.src = burl;
+
+					imgCaches[createCacheString(targetFile)] = burl;
 
 					// attachImgFollower(context, img!, targetFile, observer);
 				}
@@ -300,8 +311,6 @@ export function drawImageOnElement(
 		.catch((err) => {
 			cv!.remove();
 		});
-
-	attachImgFollower(context, img!, targetFile, observer);
 }
 
 export function attachImgFollower(
@@ -315,14 +324,41 @@ export function attachImgFollower(
 		return;
 	}
 
-	let imgOverlayEl: HTMLElement | null = imgParent.querySelector(
-		"div.imgk-plugin-overlay"
-	);
-	if (!imgOverlayEl) {
-		imgOverlayEl = imgParent.createDiv({
-			cls: "imgk-plugin-overlay",
-		});
+	let imgOverlayId = img.getAttribute("data-imgk-overlay");
+	if (!imgOverlayId) {
+		imgOverlayId = uniqueId();
+		img.setAttribute("data-imgk-overlay", imgOverlayId);
 	}
+
+	let imgOverlayEl: HTMLElement | undefined;
+	let imgOverEls = imgParent.querySelectorAll("div.imgk-plugin-overlay");
+	for (let i = 0; i < imgOverEls.length; i++) {
+		const el = imgOverEls[i];
+		if (!(el instanceof HTMLElement)) {
+			continue;
+		}
+
+		if (el.getAttribute("data-imgk-overlay") === imgOverlayId) {
+			imgOverlayEl = el;
+			break;
+		}
+	}
+
+	if (imgOverlayEl) {
+		console.log("imgOverlay already exists!!");
+		return;
+	}
+
+	// console.log("create overlay : ", imgOverlayId);
+	imgOverlayEl = imgParent.createDiv({
+		cls: "imgk-plugin-overlay",
+		attr: { "data-imgk-overlay": imgOverlayId },
+	});
+
+	// imgOverlayEl = document.body.createDiv({
+	// 	cls: "imgk-plugin-overlay",
+	// 	attr: { "data-imgk-overlay": imgOverlayId },
+	// });
 
 	imgOverlayEl.draggable = true;
 	const resPath = context.plugin.app.vault.getResourcePath(file);
@@ -344,6 +380,11 @@ export function attachImgFollower(
 		const newWidth = `${img.offsetWidth}px`;
 		const newHeight = `${img.offsetHeight}px`;
 
+		// const newLeft = `${img.getBoundingClientRect().left}px`;
+		// const newTop = `${img.getBoundingClientRect().top}px`;
+		// const newWidth = `${img.offsetWidth}px`;
+		// const newHeight = `${img.offsetHeight}px`;
+
 		let hasChanges = false;
 		if (newLeft !== imgOverlayEl!.style.left) {
 			hasChanges = true;
@@ -363,39 +404,50 @@ export function attachImgFollower(
 			imgOverlayEl!.style.height = newHeight;
 		}
 
-		// console.log(
-		// 	"followImg ",
-		// 	img.src,
-		// 	img,
-		// 	imgOverlayEl,
-		// 	img.getClientRects(),
-		// 	img.offsetLeft,
-		// 	img.offsetTop,
-		// 	img.offsetWidth,
-		// 	img.offsetHeight
-		// );
+		console.log(
+			"followImg ",
+			img.src,
+			img,
+			imgOverlayEl,
+			img.getClientRects(),
+			img.getBoundingClientRect(),
+			img.offsetLeft,
+			img.offsetTop,
+			img.offsetWidth,
+			img.offsetHeight,
+			img.clientLeft,
+			img.clientTop,
+			img.clientWidth,
+			img.clientHeight
+		);
 
 		return hasChanges;
 	};
 
 	let infinityLoopAvoider: boolean = false;
 
+	img.addEventListener("touchstart", () => {
+		followImg();
+	});
+	img.addEventListener("mouseover", () => {
+		console.log("mouse over");
+		followImg();
+	});
 	const lazyFollowImg = () => {
 		followImg();
 
 		if (infinityLoopAvoider) {
-			console.log("canve");
 			return false;
 		}
 
 		infinityLoopAvoider = true;
 
-		setTimeout(followImg, 0);
-		setTimeout(followImg, 300);
-		setTimeout(followImg, 600);
-		setTimeout(() => {
-			infinityLoopAvoider = false;
-		}, 1001);
+		// setTimeout(followImg, 0);
+		// setTimeout(followImg, 300);
+		// setTimeout(followImg, 600);
+		// setTimeout(() => {
+		// 	infinityLoopAvoider = false;
+		// }, 1001);
 	};
 
 	followImg();
@@ -403,17 +455,32 @@ export function attachImgFollower(
 		lazyFollowImg();
 	});
 	resizeOb.observe(img);
-
 	observer?.addListener(lazyFollowImg);
 
 	// new ImgkMutationObserver(img, {
 	// 	attributes: true,
 	// }).addListener(lazyFollowImg);
 
-	new ImgkMutationObserver(imgParent, {
-		childList: true,
-		subtree: true,
-		attributes: true,
-		characterData: true,
-	}).addListener(lazyFollowImg);
+	const mo = new MutationObserver(
+		(mutations: MutationRecord[], observer: MutationObserver) => {
+			for (const mu of mutations) {
+				for (let i = 0; i < mu.removedNodes.length; i++) {
+					if (mu.removedNodes[i] === img) {
+						console.log("removed");
+						observer.disconnect();
+						imgOverlayEl?.remove();
+					}
+				}
+			}
+		}
+	);
+
+	mo.observe(imgParent, { childList: true, subtree: true });
+
+	// new ImgkMutationObserver(imgParent, {
+	// 	childList: true,
+	// 	subtree: true,
+	// 	attributes: true,
+	// 	characterData: true,
+	// }).addListener(lazyFollowImg);
 }

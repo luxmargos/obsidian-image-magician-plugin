@@ -32,6 +32,7 @@
 		"@webtoon/psd": "^0.4.0",
 		"compare-versions": "^6.1.0",
 		"lodash-es": "^4.17.21",
+		"loglevel": "^1.8.1",
 		"path-browserify": "^1.0.1"
 	}
 }

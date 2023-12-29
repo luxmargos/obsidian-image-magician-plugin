@@ -12,7 +12,7 @@ import { PIE } from "./engines/imgEngines";
 import { PluginFullName } from "./consts/main";
 import { createErrorEl } from "./errors";
 import { ImgkPluginSettingTab } from "./settings/settings_tab";
-import { exportFormatMap } from "./exporter";
+import { exportFormatMap } from "./export_settings";
 import { ImgkPluginExportDialog } from "./dialogs/export_opt_dialog";
 
 export const VIEW_TYPE_IMGK_PLUGIN = "imgk-plugin-view";
@@ -55,9 +55,7 @@ export class ImgkPluginFileView extends EditableFileView {
 		return this.file?.basename ?? "";
 	}
 
-	onload(): void {
-		console.log("on open");
-	}
+	onload(): void {}
 	onunload(): void {}
 
 	protected onOpen(): Promise<void> {
@@ -72,7 +70,6 @@ export class ImgkPluginFileView extends EditableFileView {
 	}
 
 	onLoadFile(file: TFile): Promise<void> {
-		console.log("onLoadFile");
 		return new Promise(async (resolve, reject) => {
 			let canvas: HTMLCanvasElement | undefined;
 			try {
@@ -113,17 +110,5 @@ export class ImgkPluginFileView extends EditableFileView {
 		});
 	}
 
-	showUi(contEl: HTMLElement) {
-		const settingMain = contEl.createDiv({
-			cls: "imgk-view-tools",
-		});
-		const setting = new Setting(settingMain).addButton(
-			(comp: ButtonComponent) => {
-				comp.setIcon("file-output");
-			}
-		);
-		setting.descEl.toggle(false);
-		setting.nameEl.toggle(false);
-		setting.settingEl.style.border = "none";
-	}
+	showUi(contEl: HTMLElement) {}
 }

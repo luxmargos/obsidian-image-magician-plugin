@@ -1,14 +1,15 @@
 import { TFile, normalizePath } from "obsidian";
-import { ExportFormat, genExportPath } from "../exporter";
+import { ExportFormat, genExportPath } from "../export_settings";
 import { MainPluginContext, PluginContext } from "../context";
 import { findValutFile } from "../vault_util";
-import { ImgkExportImageProps, ImgkExportSettings } from "../settings/settings";
+import { ImgkExportSettings } from "../settings/settings";
 import {
 	ImageAdj,
 	ImageAdjFunc,
 	ImgkRuntimeExportSettings,
 } from "../settings/settings_as_func";
 import * as pb from "path-browserify";
+import { debug } from "loglevel";
 
 export interface PluginImageEngine {
 	draw(
@@ -27,10 +28,12 @@ export interface PluginImageEngine {
 
 	export(
 		context: MainPluginContext,
-		psdFile: TFile,
+		srcFile: TFile,
 		settings: ImgkRuntimeExportSettings,
-		refElement: HTMLElement
-	): Promise<void>;
+		refElement: HTMLElement,
+		forcedExport: boolean,
+		exportDstInfo: ExportDstInfo
+	): Promise<string>;
 }
 
 /**
@@ -54,20 +57,18 @@ export const exportCanvasWithBlob = async (
 ) => {
 	return new Promise<void>((resolve, reject) => {
 		try {
+			debug("export with blob : ", quality, filePath);
 			canvasElement.toBlob(
 				async (blob: Blob) => {
 					try {
 						const ab = await blob.arrayBuffer();
 
 						if (!existingFile) {
-							console.log("wow", filePath);
 							const imgFolder = pb.dirname(filePath);
 							const folderExists =
 								await context.plugin.app.vault.adapter.exists(
 									normalizePath(imgFolder)
 								);
-
-							console.log("folderExists", folderExists);
 
 							if (!folderExists) {
 								try {
@@ -115,12 +116,21 @@ export type ExportDstInfo = {
 export const resolveExportDstInfo = (
 	context: MainPluginContext,
 	source: TFile,
-	exportSettings: ImgkExportSettings
-): ExportDstInfo => {
-	const exportPath = genExportPath(exportSettings, source.path);
+	exportSettings: ImgkExportSettings,
+	specificDst: string | undefined
+): ExportDstInfo | undefined => {
+	const exportPathData = genExportPath(
+		exportSettings,
+		source.path,
+		specificDst
+	);
+	if (!exportPathData) {
+		return undefined;
+	}
+
 	const exportFile: TFile | undefined = findValutFile(
 		context,
-		exportPath.dst.path
+		exportPathData.dst.path
 	);
 
 	const isLatest: boolean =
@@ -129,7 +139,7 @@ export const resolveExportDstInfo = (
 		exportFile.stat.mtime >= source.stat.mtime;
 
 	return {
-		path: exportPath.dst.path,
+		path: exportPathData.dst.path,
 		file: exportFile,
 		isLatest: isLatest,
 	};

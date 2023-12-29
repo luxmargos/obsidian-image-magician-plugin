@@ -1,11 +1,15 @@
 import { asTFile } from "../../vault_util";
-import { ExportFormat } from "../../exporter";
+import { ExportFormat } from "../../export_settings";
 import { TAbstractFile, TFile } from "obsidian";
-import { IMagickImage, ImageMagick } from "@imagemagick/magick-wasm";
 import {
+	IMagickImage,
+	ImageMagick,
+	MagickGeometry,
+} from "@imagemagick/magick-wasm";
+import {
+	ExportDstInfo,
 	PluginImageEngine,
 	exportCanvasWithBlob,
-	resolveExportDstInfo,
 } from "../imgEngine";
 import { MainPluginContext } from "../../context";
 import { ImgkExportSettings, ImgkSize } from "../../settings/settings";
@@ -25,9 +29,8 @@ export class PluginMagickEngine implements PluginImageEngine {
 	): Promise<HTMLCanvasElement> {
 		return new Promise(async (resolve, reject) => {
 			const cv: HTMLCanvasElement = el.createEl("canvas", {
-				cls: "imgk-plugin-item",
+				cls: "imgk-plugin-export-canvas",
 			});
-			console.log("create canvas element");
 
 			try {
 				await this.drawOnCanvas(context, imgFile, cv, imageAdjFunc);
@@ -74,6 +77,7 @@ export class PluginMagickEngine implements PluginImageEngine {
 							y: img.height,
 						};
 						const imgAdj: ImageAdj = imageAdjFunc(imgSize);
+
 						if (imgAdj.scaleX < 0) {
 							img.flop();
 						}
@@ -85,7 +89,12 @@ export class PluginMagickEngine implements PluginImageEngine {
 							imgAdj.width !== img.width ||
 							imgAdj.height !== img.height
 						) {
-							img.resize(imgAdj.width, imgAdj.height);
+							const geo = new MagickGeometry(
+								imgAdj.width,
+								imgAdj.height
+							);
+							geo.ignoreAspectRatio = true;
+							img.resize(geo);
 						}
 					}
 
@@ -103,38 +112,36 @@ export class PluginMagickEngine implements PluginImageEngine {
 		context: MainPluginContext,
 		source: TFile,
 		settings: ImgkRuntimeExportSettings,
-		refElement: HTMLElement
-	): Promise<void> {
+		refElement: HTMLElement,
+		forcedExport: boolean,
+		exportDstInfo: ExportDstInfo
+	): Promise<string> {
 		return new Promise(async (resolve, reject) => {
-			const exportData = resolveExportDstInfo(
-				context,
-				source,
-				settings.data
-			);
-
-			if (exportData.isLatest) {
-				console.log("pass already exists : ", exportData.path);
-				resolve();
+			if (!forcedExport && exportDstInfo.isLatest) {
+				resolve(exportDstInfo.path);
 				return;
 			}
 
-			console.log("start export", source, exportData);
 			let canvasElement: HTMLCanvasElement | undefined;
 			try {
-				canvasElement = await this.draw(context, source, refElement);
-				console.log("draw complete", source, exportData);
+				canvasElement = await this.draw(
+					context,
+					source,
+					refElement,
+					settings.imageAdjFunc
+				);
 
 				await exportCanvasWithBlob(
 					context,
 					canvasElement,
 					settings.data.format,
 					settings.data.imgProps.quality,
-					exportData.path,
-					exportData.file
+					exportDstInfo.path,
+					exportDstInfo.file
 				);
 
 				canvasElement.remove();
-				resolve();
+				resolve(exportDstInfo.path);
 			} catch (e) {
 				canvasElement?.remove();
 				reject(e);

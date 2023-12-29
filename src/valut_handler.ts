@@ -1,29 +1,12 @@
-import { FileSystemAdapter, TAbstractFile, TFile } from "obsidian";
+import { TAbstractFile, TFile } from "obsidian";
 import { MainPluginContext } from "./context";
-import { genExportPath, isImageExportFormat } from "./exporter";
-import { PIE } from "./engines/imgEngines";
+import { genExportPath, isImageExportFormat } from "./export_settings";
 import { findValutFile, isTFile } from "./vault_util";
 import * as pb from "path-browserify";
-import {
-	ImgkExportSettings,
-	ImgkPluginSettings,
-	SettingsUtil,
-} from "./settings/settings";
+import { ImgkPluginSettings, SettingsUtil } from "./settings/settings";
 import { ImgkRuntimeExportSettings } from "./settings/settings_as_func";
-
-const exportBatch = async (
-	context: MainPluginContext,
-	sourceFile: TFile,
-	settings: ImgkRuntimeExportSettings,
-	refElement: HTMLElement
-) => {
-	try {
-		await PIE.magick().export(context, sourceFile, settings, refElement);
-	} catch (err) {
-		// TODO: Handle error
-		console.log("error!", err);
-	}
-};
+import { debug } from "loglevel";
+import { exportImage } from "./exporter";
 
 export class VaultHandler {
 	context: MainPluginContext;
@@ -71,7 +54,8 @@ export class VaultHandler {
 	stop() {
 		this.isPaused = true;
 	}
-	fullScan() {
+
+	fullScan(forcedExport: boolean) {
 		if (this.isPaused) {
 			return;
 		}
@@ -85,7 +69,7 @@ export class VaultHandler {
 				this.getSettingsUtil().findRuntimeAutoExports(file);
 
 			for (const settings of autoExports) {
-				this.runExport(file as TFile, settings);
+				this.runExport(file as TFile, settings, forcedExport);
 			}
 		}
 	}
@@ -109,13 +93,25 @@ export class VaultHandler {
 		return this.getSettingsUtil().getRuntimeSupportedFormats();
 	}
 
-	runExport(file: TFile, settings: ImgkRuntimeExportSettings) {
-		console.log("runExport : ", file);
+	runExport(
+		file: TFile,
+		settings: ImgkRuntimeExportSettings,
+		forcedExport: boolean
+	) {
 		const contEl = this.createExportElement();
-		exportBatch(this.context, file, settings, contEl)
-			.then(() => {})
+		exportImage(
+			this.context,
+			contEl,
+			file,
+			undefined,
+			settings,
+			forcedExport
+		)
+			.then((path) => {
+				debug("export complate : ", file.path, "=>", path);
+			})
 			.catch((err) => {
-				console.log(err);
+				debug(err);
 			})
 			.finally(() => {
 				contEl.remove();
@@ -126,11 +122,10 @@ export class VaultHandler {
 		if (this.isPaused) {
 			return;
 		}
-		console.log("on create : ", file);
 
 		const autoExports = this.getSettingsUtil().findRuntimeAutoExports(file);
 		for (const settings of autoExports) {
-			this.runExport(file as TFile, settings);
+			this.runExport(file as TFile, settings, false);
 		}
 	}
 
@@ -138,10 +133,10 @@ export class VaultHandler {
 		if (this.isPaused) {
 			return;
 		}
-		console.log("on modify : ", file);
+
 		const autoExports = this.getSettingsUtil().findRuntimeAutoExports(file);
 		for (const settings of autoExports) {
-			this.runExport(file as TFile, settings);
+			this.runExport(file as TFile, settings, false);
 		}
 	}
 
@@ -149,7 +144,12 @@ export class VaultHandler {
 		if (this.isPaused) {
 			return;
 		}
-		// console.log("on rename : ", oldPath, "->", file);
+
+		if (!this.getSettings().trackRename) {
+			return;
+		}
+
+		debug("on rename : ", oldPath, "->", file.path);
 
 		this.groupRename(file as TFile, oldPath)
 			.then(() => {})
@@ -162,8 +162,13 @@ export class VaultHandler {
 		for (const settings of autoExports) {
 			const existingExportedFilePath = genExportPath(
 				settings.data,
-				oldPath
-			).dst.path;
+				oldPath,
+				undefined
+			)?.dst.path;
+
+			if (!existingExportedFilePath) {
+				continue;
+			}
 
 			const existingExportedFile = findValutFile(
 				context,
@@ -173,8 +178,15 @@ export class VaultHandler {
 				continue;
 			}
 
-			const newExportedFileNPath = genExportPath(settings.data, file).dst
-				.path;
+			const newExportedFileNPath = genExportPath(
+				settings.data,
+				file,
+				undefined
+			)?.dst.path;
+
+			if (!newExportedFileNPath) {
+				continue;
+			}
 
 			const newExprtedFolder = pb.dirname(newExportedFileNPath);
 			const newExprtedFolderExists =
@@ -200,23 +212,30 @@ export class VaultHandler {
 	deleteGroupFiles(file: TFile) {
 		const autoExports = this.getSettingsUtil().findRuntimeAutoExports(file);
 		for (const settings of autoExports) {
-			const exportedFilePath = genExportPath(settings.data, file).dst
-				.path;
+			const exportedFilePath = genExportPath(
+				settings.data,
+				file,
+				undefined
+			)?.dst.path;
+
+			if (!exportedFilePath) {
+				continue;
+			}
 
 			const exportedFile = findValutFile(this.context, exportedFilePath);
 			if (!exportedFile) {
 				continue;
 			}
 
-			console.log("delete  : ", exportedFile.path);
+			debug("delete  : ", exportedFile.path);
 
 			this.context.plugin.app.vault
 				.delete(exportedFile)
 				.then(() => {
-					console.log("delete complete");
+					debug("delete complete");
 				})
 				.catch((err) => {
-					console.log(err);
+					debug(err);
 				});
 		}
 	}
@@ -225,7 +244,11 @@ export class VaultHandler {
 		if (this.isPaused) {
 			return;
 		}
-		// console.log("on delete : ", file);
+
+		if (!this.getSettings().trackDelete) {
+			return;
+		}
+		debug("on delete : ", file.path);
 
 		this.deleteGroupFiles(file as TFile);
 	}
