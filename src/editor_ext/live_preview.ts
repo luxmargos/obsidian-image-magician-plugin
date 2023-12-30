@@ -11,23 +11,16 @@ import {
 import { PluginValue } from "@codemirror/view";
 import { MainPluginContext } from "../context";
 import { linkedImgHandler, normalImgHandler } from "./img_post_processor";
-import { ImgkMutationObserver } from "./mutation_ob";
 
 export const livePreviewExtension = (context: MainPluginContext) => {
 	const vp = ViewPlugin.fromClass(
 		class implements PluginValue {
 			decorations: DecorationSet = Decoration.none;
 			initialDrawingPassed: boolean = false;
-			observer: ImgkMutationObserver;
 
 			constructor(view: EditorView) {
-				this.observer = new ImgkMutationObserver(view.dom, {
-					childList: true,
-					subtree: true,
-				});
-
-				normalImgHandler(context, view.dom, this.observer, view);
-				linkedImgHandler(context, view.dom, this.observer, view);
+				normalImgHandler(context, view.dom, undefined, view);
+				linkedImgHandler(context, view.dom, undefined, view);
 			}
 
 			update(update: ViewUpdate) {
@@ -49,14 +42,14 @@ export const livePreviewExtension = (context: MainPluginContext) => {
 					normalImgHandler(
 						context,
 						update.view.dom,
-						this.observer,
+						undefined,
 						update.view
 					);
 
 					linkedImgHandler(
 						context,
 						update.view.dom,
-						this.observer,
+						undefined,
 						update.view
 					);
 				} else if (update.docChanged || update.viewportChanged) {
@@ -64,13 +57,13 @@ export const livePreviewExtension = (context: MainPluginContext) => {
 					normalImgHandler(
 						context,
 						update.view.dom,
-						this.observer,
+						undefined,
 						update.view
 					);
 					linkedImgHandler(
 						context,
 						update.view.dom,
-						this.observer,
+						undefined,
 						update.view
 					);
 				}

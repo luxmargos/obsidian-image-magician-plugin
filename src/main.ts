@@ -1,6 +1,8 @@
 import {
+	FileSystemAdapter,
 	MarkdownPostProcessorContext,
 	Modal,
+	TFile,
 	ViewCreator,
 	WorkspaceLeaf,
 	normalizePath,
@@ -25,6 +27,10 @@ import { ImgkPluginSettingsDialog } from "./dialogs/plugin_settings_dialog";
 import { PluginName } from "./consts/main";
 import { debug, info, log, setDefaultLevel, setLevel } from "loglevel";
 import { error } from "console";
+import { ImgkMutationObserver } from "./editor_ext/mutation_ob";
+import { handleImg } from "./editor_ext/img_post_processor";
+import { ImgkPluginExportDialog } from "./dialogs/export_opt_dialog";
+import { asTFile, isTFile } from "./vault_util";
 
 export default class ImgMagicianPlugin extends MainPlugin {
 	settings: ImgkPluginSettings;
@@ -45,6 +51,9 @@ export default class ImgMagicianPlugin extends MainPlugin {
 			}
 		});
 	}
+
+	/** TODO: Save instant export settings  */
+	notifyInstantExportSettingsUpdate = () => {};
 
 	private postInit() {
 		return new Promise<void>(async (resolve, reject) => {
@@ -94,11 +103,23 @@ export default class ImgMagicianPlugin extends MainPlugin {
 		}
 		debug(listStr);
 	}
+
+	_mainObserver: ImgkMutationObserver;
+
+	get mainObserver(): ImgkMutationObserver {
+		return this._mainObserver;
+	}
+
 	async onload() {
 		// setDefaultLevel("DEBUG");
 		// setDefaultLevel("INFO");
 		// setLevel("INFO");
 		setLevel("DEBUG");
+
+		this._mainObserver = new ImgkMutationObserver(document.body, {
+			childList: true,
+			subtree: true,
+		});
 
 		if (!PIE._magick) {
 			// initialize magick engine
@@ -146,9 +167,70 @@ export default class ImgMagicianPlugin extends MainPlugin {
 			this.handleOnLayoutReady();
 		});
 
-		new ImgkPluginSettingsDialog(this.context, (newSettings) => {
-			this.onSettingsUpdate(newSettings);
-		}).open();
+		// new ImgkPluginSettingsDialog(this.context, (newSettings) => {
+		// 	this.onSettingsUpdate(newSettings);
+		// }).open();
+
+		this.addCommand({
+			id: "imgk-plugin-export-image",
+			name: "Open image export dialog",
+
+			checkCallback: (checking: boolean) => {
+				const activeFile = this.app.workspace.getActiveFile();
+				if (!activeFile) {
+					return false;
+				}
+
+				const isSupported = this.settingsUtil.isExportSupportedFormat(
+					activeFile.extension
+				);
+				if (checking) {
+					return isSupported;
+				}
+
+				if (!isSupported) {
+					return false;
+				}
+
+				new ImgkPluginExportDialog(
+					this.context,
+					this.context.plugin.settingsUtil.getSettingsRef(),
+					this.context.plugin.settingsUtil.getIntantExport(),
+					activeFile
+				).open();
+
+				return true;
+			},
+		});
+
+		this.registerEvent(
+			this.app.workspace.on("file-menu", (menu, file) => {
+				if (!isTFile(file)) {
+					return;
+				}
+				const tFile = file as TFile;
+				const isSupported = this.settingsUtil.isExportSupportedFormat(
+					tFile.extension
+				);
+
+				if (!isSupported) {
+					return;
+				}
+
+				menu.addItem((item) => {
+					item.setTitle("Open image export dialog")
+						.setIcon("image")
+						.onClick(async () => {
+							new ImgkPluginExportDialog(
+								this.context,
+								this.context.plugin.settingsUtil.getSettingsRef(),
+								this.context.plugin.settingsUtil.getIntantExport(),
+								tFile
+							).open();
+						});
+				});
+			})
+		);
 	}
 
 	private failedExts: string[] = [];
@@ -199,7 +281,7 @@ export default class ImgMagicianPlugin extends MainPlugin {
 		this.passedExts.push(...extsUpperCase);
 		this.failedExts.push(...newFailedExts);
 
-		this.settingsUtil.setRuntimeSupportedFormats(this.passedExts);
+		this.settingsUtil.setRuntimeSupportedFormats(new Set(this.passedExts));
 
 		if (newFailedExts.length > 0) {
 			const errorDialog = new Modal(this.app);
@@ -260,6 +342,7 @@ export default class ImgMagicianPlugin extends MainPlugin {
 	}
 
 	onunload() {
+		this._mainObserver.disconnect();
 		this.cleanup()
 			.then(() => {})
 			.catch((err) => {});

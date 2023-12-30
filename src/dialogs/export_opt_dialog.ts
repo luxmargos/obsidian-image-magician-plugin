@@ -30,6 +30,7 @@ export class ImgkPluginExportDialog extends Modal {
 	private onCloseCallback?: () => void;
 
 	private source?: TFile | string;
+	private srcPath?: string;
 
 	constructor(
 		context: MainPluginContext,
@@ -42,22 +43,27 @@ export class ImgkPluginExportDialog extends Modal {
 
 		this.onCloseCallback = onCloseCallback;
 
-		this.titleEl.textContent = "Export settings";
 		this.pluginSettings = pluginSettings;
 		this.exportSettings = exportSettings;
 		this.context = context;
 		this.source = source;
+		if (this.source) {
+			if (this.source instanceof TFile) {
+				this.srcPath = this.source.path;
+			} else {
+				this.srcPath = this.source;
+			}
+		}
+
+		if (!this.srcPath) {
+			this.titleEl.setText("Export settings");
+		} else {
+			this.titleEl.setText(`Export options: ${this.srcPath}`);
+		}
 	}
 
 	onOpen(): void {
-		let srcPath: string | undefined;
-		if (this.source) {
-			if (this.source instanceof TFile) {
-				srcPath = this.source.path;
-			} else {
-				srcPath = this.source;
-			}
-		}
+		const srcPath = this.srcPath;
 
 		const isInstantMode = srcPath && srcPath.length > 0;
 
@@ -65,6 +71,7 @@ export class ImgkPluginExportDialog extends Modal {
 			let detailSets: Setting[] = [];
 			let detailSetsToggleBtn: ExtraButtonComponent;
 			let expandDetailSets = false;
+			let tipSet: Setting;
 			const refreshDetailSets = () => {
 				for (const detailSet of detailSets) {
 					detailSet.settingEl.toggle(expandDetailSets);
@@ -72,19 +79,22 @@ export class ImgkPluginExportDialog extends Modal {
 
 				if (expandDetailSets) {
 					detailSetsToggleBtn?.setIcon("chevron-down");
+					tipSet.setDesc(
+						"In general, the plugin efficiently blocks an infinite export loop by using built-in filters \
+						and including two file extensions in the exported file name. When you want to break these default rules, \
+						an infinite export loop can occur with exported files having the same file extension, \
+						for example, 'MyImage.png.export.png.' \
+						In this circumstance, the auto-export process will continue until the file name exceeds its limit. \
+						If you find yourself in this situation, please refer to the following details."
+					);
 				} else {
 					detailSetsToggleBtn?.setIcon("chevron-right");
+					tipSet.setDesc("");
 				}
 			};
-			new Setting(this.contentEl)
-				.setName("Recommended settings to avoid infinity export loop.")
-				.setDesc(
-					"In general, the plugin efficiently blocks an infinite export loop by using built-in filters \
-					and including two file extensions in the exported file name. When you want to break these default rules, \
-					an infinite export loop can occur with exported files having the same file extension, \
-					for example, 'MyImage.png.export.png.' \
-					In this circumstance, the auto-export process will continue until the file name exceeds its limit. \
-					If you find yourself in this situation, please refer to the following details."
+			tipSet = new Setting(this.contentEl)
+				.setName(
+					"Tip: Recommended settings to avoid infinity export loop."
 				)
 				.setHeading()
 				.addExtraButton((comp) => {
@@ -93,8 +103,9 @@ export class ImgkPluginExportDialog extends Modal {
 						expandDetailSets = !expandDetailSets;
 						refreshDetailSets();
 					});
-					refreshDetailSets();
 				});
+
+			refreshDetailSets();
 
 			const detailSet1 = new Setting(this.contentEl);
 			detailSet1

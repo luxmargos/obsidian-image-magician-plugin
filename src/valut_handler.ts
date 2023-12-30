@@ -1,7 +1,7 @@
 import { TAbstractFile, TFile } from "obsidian";
 import { MainPluginContext } from "./context";
-import { genExportPath, isImageExportFormat } from "./export_settings";
-import { findValutFile, isTFile } from "./vault_util";
+import { genExportPath } from "./export_settings";
+import { findValutFile } from "./vault_util";
 import * as pb from "path-browserify";
 import { ImgkPluginSettings, SettingsUtil } from "./settings/settings";
 import { ImgkRuntimeExportSettings } from "./settings/settings_as_func";
@@ -87,10 +87,6 @@ export class VaultHandler {
 
 	getSettings() {
 		return this.currentSettings;
-	}
-
-	getSupportedFormats() {
-		return this.getSettingsUtil().getRuntimeSupportedFormats();
 	}
 
 	runExport(

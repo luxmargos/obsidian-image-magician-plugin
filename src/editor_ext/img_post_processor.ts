@@ -24,7 +24,8 @@ import { PIE } from "../engines/imgEngines";
 import { ImgkMutationObserver } from "./mutation_ob";
 import { lowerCasedExtNameWithoutDot } from "../utils/obsidian_path";
 import { debug } from "loglevel";
-import { uniqueId } from "lodash-es";
+import { isEqual, uniqueId } from "lodash-es";
+import { getCache, setCache } from "../img_cache";
 
 export function normalImgHandler(
 	context: MainPluginContext,
@@ -32,10 +33,6 @@ export function normalImgHandler(
 	observer?: ImgkMutationObserver,
 	cmView?: EditorView
 ) {
-	const supportedFormats =
-		context.plugin.settingsUtil.getRuntimeSupportedFormats();
-	const imgEls = contentDOM.querySelectorAll("img");
-
 	const adapter = context.plugin.app.vault.adapter;
 	const fsa: FileSystemAdapter | undefined =
 		adapter instanceof FileSystemAdapter ? adapter : undefined;
@@ -44,80 +41,93 @@ export function normalImgHandler(
 		return;
 	}
 
+	const supportedFormats =
+		context.plugin.settingsUtil.getRuntimeSupportedFormats();
+	const imgEls = contentDOM.querySelectorAll("img");
 	const basePath = fsa.getBasePath();
 
 	for (let i = 0; i < imgEls.length; i++) {
 		const imgEl = imgEls[i];
-		if (!(imgEl instanceof HTMLImageElement)) {
-			continue;
-		}
-		const src = imgEl.getAttribute("src");
-		if (!src) {
-			continue;
-		}
-
-		if (!src.startsWith("app://")) {
-			continue;
-		}
-
-		let srcFile: TFile | undefined | null;
-
-		const srcUrl = new URL(src);
-		let fullResPath = decodeURIComponent(srcUrl.pathname);
-		const ext = lowerCasedExtNameWithoutDot(fullResPath);
-		if (ext.length < 1) {
-			continue;
-		}
-
-		let isSupportedExt = supportedFormats.includes(ext);
-		if (!isSupportedExt) {
-			continue;
-		}
-
-		const basePathIdx = fullResPath.indexOf(basePath);
-		if (basePathIdx >= 0) {
-			let valutRelativePath = fullResPath.substring(
-				basePathIdx + basePath.length
-			);
-
-			//remove slash start
-			if (valutRelativePath.startsWith("/")) {
-				valutRelativePath = valutRelativePath.substring(1);
-			}
-
-			console.log("valutRelativePath", valutRelativePath);
-			srcFile = findValutFile(context, valutRelativePath, true);
-		}
-
-		if (!srcFile) {
-			continue;
-		}
-
-		if (!isTFile(srcFile, supportedFormats)) {
-			continue;
-		}
-
-		const imgElParent = imgEl.parentElement;
-		if (!imgElParent) {
-			continue;
-		}
-		let draw = !isLatestImgDrawnElement(imgEl, srcFile);
-
-		if (!draw) {
-			debug("pass redrawing");
-			continue;
-		}
-
-		const cacheString = createCacheString(srcFile);
-		if (cacheString in imgCaches) {
-			imgEl.src = imgCaches[cacheString];
-			console.log("reuse cache");
-		} else {
-			drawImageOnElement(context, imgElParent, imgEl, srcFile, observer);
-		}
-		attachImgFollower(context, imgEl, srcFile, observer);
+		handleImg(context, basePath, supportedFormats, imgEl, observer, cmView);
 	}
 }
+
+export const handleImg = (
+	context: MainPluginContext,
+	basePath: string,
+	supportedFormats: Set<string>,
+	imgEl: HTMLElement,
+	observer?: ImgkMutationObserver,
+	cmView?: EditorView
+) => {
+	if (!(imgEl instanceof HTMLImageElement)) {
+		return;
+	}
+	const src = imgEl.getAttribute("src");
+	if (!src) {
+		return;
+	}
+
+	if (!src.startsWith("app://")) {
+		return;
+	}
+
+	let srcFile: TFile | undefined | null;
+
+	const srcUrl = new URL(src);
+	let fullResPath = decodeURIComponent(srcUrl.pathname);
+	const ext = lowerCasedExtNameWithoutDot(fullResPath);
+	if (ext.length < 1) {
+		return;
+	}
+
+	let isSupportedExt = supportedFormats.has(ext);
+	if (!isSupportedExt) {
+		return;
+	}
+
+	const basePathIdx = fullResPath.indexOf(basePath);
+	if (basePathIdx >= 0) {
+		let valutRelativePath = fullResPath.substring(
+			basePathIdx + basePath.length
+		);
+
+		//remove slash start
+		if (valutRelativePath.startsWith("/")) {
+			valutRelativePath = valutRelativePath.substring(1);
+		}
+
+		srcFile = findValutFile(context, valutRelativePath, true);
+	}
+
+	if (!srcFile) {
+		return;
+	}
+
+	if (!isTFile(srcFile, supportedFormats)) {
+		return;
+	}
+
+	const imgElParent = imgEl.parentElement;
+	if (!imgElParent) {
+		return;
+	}
+	let draw = !isLatestImgDrawnElement(imgEl, srcFile);
+
+	if (!draw) {
+		debug("pass redrawing");
+		return;
+	}
+
+	const cache = getCache(srcFile);
+	if (cache) {
+		imgEl.src = cache;
+	} else {
+		drawImageOnElement(context, imgElParent, imgEl, srcFile);
+	}
+
+	attachImgFollower(context, imgEl, srcFile, observer);
+};
 
 export function isLatestImgDrawnElement(el: HTMLElement, file: TFile) {
 	if (el.hasAttribute("data-imgk-plugin-mod-date")) {
@@ -127,7 +137,7 @@ export function isLatestImgDrawnElement(el: HTMLElement, file: TFile) {
 			);
 			return modDate >= file.stat.mtime;
 		} catch (e) {
-			console.log(e);
+			debug(e);
 		}
 	}
 	return false;
@@ -236,12 +246,11 @@ export function linkedImgHandler(
 		internalEmbed.classList.add("image-embed");
 		internalEmbed.classList.add("media-embed");
 
-		const cacheString = createCacheString(srcFile);
-		if (cacheString in imgCaches) {
-			img.src = imgCaches[cacheString];
-			console.log("reuse cache");
+		const cache = getCache(srcFile);
+		if (cache) {
+			img.src = cache;
 		} else {
-			drawImageOnElement(context, internalEmbed, img, srcFile, observer);
+			drawImageOnElement(context, internalEmbed, img, srcFile);
 		}
 		attachImgFollower(context, img, srcFile, observer);
 	}
@@ -265,17 +274,11 @@ export function applyContainerMdSize(
 	}
 }
 
-const imgCaches: Record<string, string> = {};
-const createCacheString = (file: TFile) => {
-	return `${file.path}_${file.stat.mtime}`;
-};
-
 export function drawImageOnElement(
 	context: MainPluginContext,
 	containerElement: HTMLElement,
 	img: HTMLImageElement,
-	targetFile: TFile,
-	observer?: ImgkMutationObserver
+	targetFile: TFile
 ) {
 	//disable img click
 	// img.style.pointerEvents = "none";
@@ -299,7 +302,7 @@ export function drawImageOnElement(
 					const burl = URL.createObjectURL(blob);
 					img!.src = burl;
 
-					imgCaches[createCacheString(targetFile)] = burl;
+					setCache(targetFile, burl);
 
 					// attachImgFollower(context, img!, targetFile, observer);
 				}
@@ -345,7 +348,6 @@ export function attachImgFollower(
 	}
 
 	if (imgOverlayEl) {
-		console.log("imgOverlay already exists!!");
 		return;
 	}
 
@@ -354,11 +356,6 @@ export function attachImgFollower(
 		cls: "imgk-plugin-overlay",
 		attr: { "data-imgk-overlay": imgOverlayId },
 	});
-
-	// imgOverlayEl = document.body.createDiv({
-	// 	cls: "imgk-plugin-overlay",
-	// 	attr: { "data-imgk-overlay": imgOverlayId },
-	// });
 
 	imgOverlayEl.draggable = true;
 	const resPath = context.plugin.app.vault.getResourcePath(file);
@@ -374,113 +371,153 @@ export function attachImgFollower(
 		e.dataTransfer?.setData("text/uri-list", file.path);
 	});
 
+	const realBoundFoundingDot = imgParent.createDiv({
+		cls: "imgk-plugin-overlay-dot",
+	});
+
+	let lastUsedImgDomRect: DOMRect | undefined;
+	let lastUsedParentDomRect: DOMRect | undefined;
+	let lastUsedImgRect:
+		| { x: number; y: number; width: number; height: number }
+		| undefined;
+
 	const followImg = () => {
-		const newLeft = `${img.offsetLeft}px`;
-		const newTop = `${img.offsetTop}px`;
-		const newWidth = `${img.offsetWidth}px`;
-		const newHeight = `${img.offsetHeight}px`;
-
-		// const newLeft = `${img.getBoundingClientRect().left}px`;
-		// const newTop = `${img.getBoundingClientRect().top}px`;
-		// const newWidth = `${img.offsetWidth}px`;
-		// const newHeight = `${img.offsetHeight}px`;
-
-		let hasChanges = false;
-		if (newLeft !== imgOverlayEl!.style.left) {
-			hasChanges = true;
-			imgOverlayEl!.style.left = newLeft;
-		}
-		if (newTop !== imgOverlayEl!.style.top) {
-			hasChanges = true;
-			imgOverlayEl!.style.top = newTop;
+		// real bounding element of absolute position
+		const realLayoutBoundEl = findRealLayoutBound(realBoundFoundingDot);
+		if (!realLayoutBoundEl) {
+			return;
 		}
 
-		if (newWidth !== imgOverlayEl!.style.width) {
-			hasChanges = true;
-			imgOverlayEl!.style.width = newWidth;
-		}
-		if (newHeight !== imgOverlayEl!.style.height) {
-			hasChanges = true;
-			imgOverlayEl!.style.height = newHeight;
-		}
+		const imgDomRect = img.getBoundingClientRect();
+		const parentDomRect = realLayoutBoundEl.getBoundingClientRect();
 
-		console.log(
-			"followImg ",
-			img.src,
-			img,
-			imgOverlayEl,
-			img.getClientRects(),
-			img.getBoundingClientRect(),
-			img.offsetLeft,
-			img.offsetTop,
-			img.offsetWidth,
-			img.offsetHeight,
-			img.clientLeft,
-			img.clientTop,
-			img.clientWidth,
-			img.clientHeight
-		);
-
-		return hasChanges;
-	};
-
-	let infinityLoopAvoider: boolean = false;
-
-	img.addEventListener("touchstart", () => {
-		followImg();
-	});
-	img.addEventListener("mouseover", () => {
-		console.log("mouse over");
-		followImg();
-	});
-	const lazyFollowImg = () => {
-		followImg();
-
-		if (infinityLoopAvoider) {
-			return false;
+		if (lastUsedImgDomRect && lastUsedParentDomRect) {
+			if (
+				isEqual(imgDomRect, lastUsedImgDomRect) &&
+				isEqual(parentDomRect, lastUsedParentDomRect)
+			) {
+				return;
+			}
 		}
 
-		infinityLoopAvoider = true;
+		lastUsedImgDomRect = imgDomRect;
+		lastUsedParentDomRect = parentDomRect;
 
-		// setTimeout(followImg, 0);
-		// setTimeout(followImg, 300);
-		// setTimeout(followImg, 600);
-		// setTimeout(() => {
-		// 	infinityLoopAvoider = false;
-		// }, 1001);
+		const imgRect = {
+			x: imgDomRect.x - parentDomRect.x,
+			y: imgDomRect.y - parentDomRect.y,
+			width: imgDomRect.width,
+			height: imgDomRect.height,
+		};
+
+		if (lastUsedImgRect && isEqual(lastUsedImgRect, imgRect)) {
+			return;
+		}
+
+		lastUsedImgRect = imgRect;
+
+		const newLeft = `${imgRect.x}px`;
+		const newTop = `${imgRect.y}px`;
+		const newWidth = `${imgRect.width}px`;
+		const newHeight = `${imgRect.height}px`;
+
+		imgOverlayEl!.style.left = newLeft;
+		imgOverlayEl!.style.top = newTop;
+		imgOverlayEl!.style.width = newWidth;
+		imgOverlayEl!.style.height = newHeight;
 	};
 
 	followImg();
-	const resizeOb = new ResizeObserver((entries) => {
-		lazyFollowImg();
+
+	let resizeOb: ResizeObserver;
+	let additionalObDisconnector: (() => void) | undefined;
+	let mainObDisconnector: (() => void) | undefined;
+	const checkAndRunFollowImg = () => {
+		//clear observers if img element has removed
+		if (!img.isConnected) {
+			if (mainObDisconnector) {
+				mainObDisconnector();
+			}
+			if (additionalObDisconnector) {
+				additionalObDisconnector();
+			}
+			if (resizeOb) {
+				resizeOb.disconnect();
+			}
+			return;
+		}
+
+		if (img.isShown()) {
+			followImg();
+		}
+	};
+
+	resizeOb = new ResizeObserver((entries) => {
+		checkAndRunFollowImg();
 	});
 	resizeOb.observe(img);
-	observer?.addListener(lazyFollowImg);
 
-	// new ImgkMutationObserver(img, {
-	// 	attributes: true,
-	// }).addListener(lazyFollowImg);
+	additionalObDisconnector = observer?.addListener(() => {
+		checkAndRunFollowImg();
+	});
 
-	const mo = new MutationObserver(
-		(mutations: MutationRecord[], observer: MutationObserver) => {
-			for (const mu of mutations) {
-				for (let i = 0; i < mu.removedNodes.length; i++) {
-					if (mu.removedNodes[i] === img) {
-						console.log("removed");
-						observer.disconnect();
-						imgOverlayEl?.remove();
-					}
-				}
-			}
+	mainObDisconnector = context.plugin.mainObserver.addListener(() => {
+		checkAndRunFollowImg();
+	});
+}
+
+const findRealLayoutBoundInner = (
+	targetEl: HTMLElement,
+	parentEl: HTMLElement | null | undefined,
+	useRounding: boolean
+): HTMLElement | undefined => {
+	if (parentEl) {
+		const parentBound = parentEl.getBoundingClientRect();
+		const targetBound = targetEl.getBoundingClientRect();
+		// console.log("compare : ", targetBound, parentBound, parentEl);
+
+		let match = false;
+
+		if (
+			!useRounding &&
+			parentBound.x === targetBound.x &&
+			parentBound.y === targetBound.y
+		) {
+			match = true;
 		}
+
+		if (
+			!match &&
+			useRounding &&
+			Math.round(parentBound.x) === Math.round(targetBound.x) &&
+			Math.round(parentBound.y) === Math.round(targetBound.y)
+		) {
+			match = true;
+		}
+		if (match) {
+			return parentEl;
+		} else {
+			return findRealLayoutBoundInner(
+				targetEl,
+				parentEl.parentElement,
+				useRounding
+			);
+		}
+	}
+
+	return undefined;
+};
+
+const findRealLayoutBound = (targetEl: HTMLElement) => {
+	let result = findRealLayoutBoundInner(
+		targetEl,
+		targetEl.parentElement,
+		false
 	);
 
-	mo.observe(imgParent, { childList: true, subtree: true });
+	if (result) {
+		return result;
+	}
 
-	// new ImgkMutationObserver(imgParent, {
-	// 	childList: true,
-	// 	subtree: true,
-	// 	attributes: true,
-	// 	characterData: true,
-	// }).addListener(lazyFollowImg);
-}
+	return findRealLayoutBoundInner(targetEl, targetEl.parentElement, true);
+};

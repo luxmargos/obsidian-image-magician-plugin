@@ -58,19 +58,6 @@ let imageMagickWasmPlugin = {
 		// 	})
 		// );
 
-		// build.onLoad(
-		// 	{ filter: /.*/, namespace: "imagemagick-stub" },
-		// 	async (args) => ({
-		// 		contents: `import wasm from ${JSON.stringify(args.path)}
-		// 		export default (imports)=>{
-		// 			imports.initializeImageMagick(wasm).then(()=>{
-		// 				console.log(imports.Magick.imageMagickVersion);
-		// 			});
-		// 		};
-		// 		`,
-		// 	})
-		// );
-
 		build.onLoad(
 			{ filter: /.*/, namespace: "imagemagick-stub" },
 			async (args) => ({
@@ -120,6 +107,7 @@ const context = await esbuild.context({
 		"@lezer/lr",
 		...builtins,
 	],
+	minify: prod ? true : false,
 	plugins: [imageMagickWasmPlugin],
 	format: "cjs",
 	// format: "esm",

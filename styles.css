@@ -74,11 +74,22 @@ img.imgk-plugin-item:not([width]) {
 	top: 0;
 	cursor: pointer;
 
-	background-color: red;
-	opacity: 0.8;
+	/* background-color: red;
+	opacity: 0.8; */
 
 	/* right: 0; */
 	/* bottom: 0; */
+}
+
+.imgk-plugin-overlay-dot {
+	position: absolute;
+	display: inline-block;
+	left: 0px;
+	top: 0px;
+	width: 0px;
+	height: 0px;
+	pointer-events: none;
+	opacity: 0;
 }
 
 .setting-item .setting-item-control .imgk-textarea {

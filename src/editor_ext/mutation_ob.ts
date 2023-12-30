@@ -13,8 +13,15 @@ export class ImgkMutationObserver {
 		this._observer.observe(target, options);
 	}
 
-	addListener(callback: MutationCallback) {
+	disconnect() {
+		this._observer.disconnect();
+	}
+
+	addListener(callback: MutationCallback): () => void {
 		this._callbacks.push(callback);
+		return () => {
+			this.removeListener(callback);
+		};
 	}
 	removeListener(callback: MutationCallback) {
 		this._callbacks.remove(callback);

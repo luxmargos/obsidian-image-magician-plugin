@@ -1,6 +1,6 @@
 {
 	"id": "image-magician-plugin",
-	"name": "Image Magician Plugin",
+	"name": "Image Magician",
 	"version": "0.1.0",
 	"minAppVersion": "0.15.0",
 	"description": "An obsidian.md plugin. Supports view and export of several image formats.",

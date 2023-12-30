@@ -8,6 +8,7 @@ import {
 	convertAllExportSettingsToRuntime,
 } from "./settings_as_func";
 import { isTFile } from "src/vault_util";
+import { format } from "path";
 
 export enum ImgkSizeAdjustType {
 	Fixed = 0,
@@ -72,6 +73,34 @@ export interface ImgkExportSettings {
 	pathOpts: ImgkExportPath;
 }
 
+const DEFAULT_EXPORT_SUPPORTED_FORMATS = [
+	"psd",
+	"xcf",
+	"tif",
+	"tiff",
+	"dcm",
+	"dds",
+	"hdr",
+	"heic",
+	"mng",
+	"pbm",
+	"pcx",
+	"pfm",
+	"pgm",
+	"pnm",
+	"ppm",
+	"sgi",
+	"xbm",
+	"avif",
+	"jpg",
+	"png",
+	"bmp",
+	"webp",
+	"gif",
+	// "tga", -> decode error
+	// "svg", -> no inkscape commnand
+];
+
 export const getDefaultSupportedFormats = () => {
 	return [
 		"psd",
@@ -95,9 +124,11 @@ export const getDefaultSupportedFormats = () => {
 		// "avif",
 		// "jpg",
 		// "png",
+		// "webp",
 
 		// image magick does not support
-		// "tga",
+		// "tga", -> decode error
+		// "svg", -> no inkscape commnand
 	];
 };
 
@@ -153,6 +184,8 @@ export const DEFAULT_EXPORT_SETTINGS: ImgkExportSettings = {
 export interface ImgkPluginSettings {
 	supportedFormats: string[];
 
+	exportSupportedFormats: string[];
+
 	autoExportList: ImgkExportSettings[];
 	instantExport: ImgkExportSettings;
 
@@ -183,6 +216,7 @@ export const getWarnList = () => {
 export const DEFAULT_SETTINGS: ImgkPluginSettings = {
 	supportedFormats: getDefaultSupportedFormats(),
 
+	exportSupportedFormats: cloneDeep(DEFAULT_EXPORT_SUPPORTED_FORMATS),
 	autoExportList: [],
 	instantExport: cloneDeep(DEFAULT_EXPORT_SETTINGS),
 
@@ -200,20 +234,22 @@ export const DEFAULT_SETTINGS: ImgkPluginSettings = {
 
 export class SettingsUtil {
 	private settings: ImgkPluginSettings;
-	private runtimeSupportedSettings: string[] = [];
+	private runtimeSupportedSettings: Set<string> = new Set();
 	private runtimeAutoExports: ImgkRuntimeExportSettings[] = [];
+	private runtimeExportSupportedFormats: Set<string> = new Set();
 
 	constructor(settings: ImgkPluginSettings) {
 		this.settings = settings;
 		this.generateRuntimeAutoExports();
+		this.generateRuntimeExportSupportedFormats();
 	}
 
 	getIntantExport = (): ImgkExportSettings => {
 		return this.settings.instantExport;
 	};
 
-	setRuntimeSupportedFormats(formats: string[]) {
-		this.runtimeSupportedSettings = formats;
+	setRuntimeSupportedFormats(formats: Set<string>) {
+		this.runtimeSupportedSettings = new Set(formats);
 	}
 
 	getRuntimeSupportedFormats = () => {
@@ -234,10 +270,26 @@ export class SettingsUtil {
 	getClone = () => {
 		const cloned = new SettingsUtil(this.getSettingsClone());
 		cloned.setRuntimeSupportedFormats(
-			cloneDeep(this.getRuntimeSupportedFormats())
+			new Set(this.runtimeSupportedSettings)
 		);
 
 		return cloned;
+	};
+
+	generateRuntimeExportSupportedFormats = () => {
+		this.runtimeExportSupportedFormats = new Set([
+			...this.settings.exportSupportedFormats,
+			...this.settings.exportSupportedFormats.map((value) =>
+				value.toUpperCase()
+			),
+		]);
+	};
+
+	isExportSupportedFormat = (ext?: string): boolean => {
+		if (!ext) {
+			return false;
+		}
+		return this.runtimeExportSupportedFormats.has(ext.toLowerCase());
 	};
 
 	generateRuntimeAutoExports = () => {

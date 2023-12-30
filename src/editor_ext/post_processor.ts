@@ -2,15 +2,12 @@ import { MarkdownPostProcessorContext } from "obsidian";
 import { MainPluginContext } from "../context";
 import { linkedImgHandler, normalImgHandler } from "./img_post_processor";
 import { ImgkMutationObserver } from "./mutation_ob";
-import { debug } from "loglevel";
 
 export const getMarkdownPostProcessor = (context: MainPluginContext) => {
 	const postProcessor = async (
 		el: HTMLElement,
 		ctx: MarkdownPostProcessorContext
 	) => {
-		debug("===========================getMarkdownPostProcessor");
-
 		const processor = () => {
 			normalImgHandler(context, el);
 			linkedImgHandler(context, el);
@@ -20,12 +17,18 @@ export const getMarkdownPostProcessor = (context: MainPluginContext) => {
 			mutations: MutationRecord[],
 			observer: MutationObserver
 		) => {
+			if (!el.isConnected) {
+				observer.disconnect();
+				return;
+			}
+
 			processor();
 		};
 
 		const ob: ImgkMutationObserver = new ImgkMutationObserver(el, {
 			childList: true,
 			subtree: true,
+			attributes: true,
 		});
 		ob.addListener(moCallback);
 

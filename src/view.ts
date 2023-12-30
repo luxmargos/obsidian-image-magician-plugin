@@ -14,6 +14,8 @@ import { createErrorEl } from "./errors";
 import { ImgkPluginSettingTab } from "./settings/settings_tab";
 import { exportFormatMap } from "./export_settings";
 import { ImgkPluginExportDialog } from "./dialogs/export_opt_dialog";
+import { getCache, setCache } from "./img_cache";
+import { attachImgFollower } from "./editor_ext/img_post_processor";
 
 export const VIEW_TYPE_IMGK_PLUGIN = "imgk-plugin-view";
 export class ImgkPluginFileView extends EditableFileView {
@@ -43,7 +45,7 @@ export class ImgkPluginFileView extends EditableFileView {
 	canAcceptExtension(extension: string): boolean {
 		return this.context.plugin.settingsUtil
 			.getRuntimeSupportedFormats()
-			.contains(extension);
+			.has(extension);
 	}
 
 	getViewType(): string {
@@ -71,9 +73,31 @@ export class ImgkPluginFileView extends EditableFileView {
 
 	onLoadFile(file: TFile): Promise<void> {
 		return new Promise(async (resolve, reject) => {
+			this.contentEl.empty();
+
+			const imgContainer = this.contentEl.createDiv({
+				cls: "image-container",
+			});
+			const imgElement = imgContainer.createEl("img", {
+				cls: ["imgk-plugin-item"],
+			});
+
 			let canvas: HTMLCanvasElement | undefined;
+			const finishJob = () => {
+				canvas?.remove();
+				canvas = undefined;
+				this.showUi(imgContainer);
+				attachImgFollower(this.context, imgElement, file);
+				resolve();
+			};
+
 			try {
-				this.contentEl.empty();
+				const cache = getCache(file);
+				if (cache) {
+					imgElement.src = cache;
+					finishJob();
+					return;
+				}
 
 				canvas = await PIE.magick().draw(
 					this.context,
@@ -81,27 +105,20 @@ export class ImgkPluginFileView extends EditableFileView {
 					this.contentEl
 				);
 
-				const imgContainer = this.contentEl.createDiv({
-					cls: "image-container",
-				});
-				const imgElement = imgContainer.createEl("img", {
-					cls: ["imgk-plugin-item"],
-				});
-
-				// support excalidraw interaction mode. unfortunately it is not working well.
-				// attachImgFollower(this.context, imgElement, file);
-
 				canvas.toBlob((blob) => {
 					if (blob) {
 						const burl = URL.createObjectURL(blob);
 						imgElement.src = burl;
+						setCache(file, burl);
+						finishJob();
 					}
 				});
-				// imgElement.src = canvas.toDataURL();
 
-				canvas?.remove();
-				this.showUi(imgContainer);
-				resolve();
+				// display with dataUrl
+				// const dataUrl: string = canvas.toDataURL();
+				// imgElement.src = dataUrl;
+				// setCache(file, dataUrl);
+				// finishJob();
 			} catch (err) {
 				canvas?.remove();
 				createErrorEl(this.contentEl, file.path, err);
