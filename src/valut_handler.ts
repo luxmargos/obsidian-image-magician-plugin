@@ -104,7 +104,7 @@ export class VaultHandler {
 			forcedExport
 		)
 			.then((path) => {
-				debug("export complate : ", file.path, "=>", path);
+				debug("export complete : ", file.path, "=>", path);
 			})
 			.catch((err) => {
 				debug(err);

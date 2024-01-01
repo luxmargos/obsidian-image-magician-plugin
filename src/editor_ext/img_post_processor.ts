@@ -33,6 +33,10 @@ export function normalImgHandler(
 	observer?: ImgkMutationObserver,
 	cmView?: EditorView
 ) {
+	if (!context.plugin.settingsUtil.getSettingsRef().renderMarkdownImgTag) {
+		return;
+	}
+
 	const adapter = context.plugin.app.vault.adapter;
 	const fsa: FileSystemAdapter | undefined =
 		adapter instanceof FileSystemAdapter ? adapter : undefined;
@@ -126,7 +130,9 @@ export const handleImg = (
 		drawImageOnElement(context, imgElParent, imgEl, srcFile);
 	}
 
-	attachImgFollower(context, imgEl, srcFile, observer);
+	if (context.plugin.settingsUtil.getSettingsRef().overrideDragAndDrop) {
+		attachImgFollower(context, imgEl, srcFile, observer);
+	}
 };
 
 export function isLatestImgDrawnElement(el: HTMLElement, file: TFile) {
@@ -153,6 +159,12 @@ export function linkedImgHandler(
 	observer?: ImgkMutationObserver,
 	cmView?: EditorView
 ) {
+	if (
+		!context.plugin.settingsUtil.getSettingsRef().renderMarkdownInlineLink
+	) {
+		return;
+	}
+
 	// return Decoration.none;
 
 	const internalEmbeds = contentDOM.querySelectorAll(".internal-embed");
@@ -181,15 +193,6 @@ export function linkedImgHandler(
 			"img.imgk-plugin-item"
 		);
 
-		// if (!img) {
-		// 	let normalImg: HTMLImageElement | null =
-		// 		internalEmbed.querySelector("img");
-		// 	if (normalImg) {
-		// 		img = normalImg;
-		// 	}
-		// }
-
-		//apply size without redrawing
 		if (img) {
 			applyContainerMdSize(
 				context.plugin.settings.supportMdImageSizeFormat,
@@ -220,13 +223,17 @@ export function linkedImgHandler(
 
 		const titleNode = internalEmbed.querySelector(".file-embed-title");
 		if (titleNode && titleNode instanceof HTMLElement) {
-			titleNode.style.height = "0px";
-			titleNode.style.opacity = "0";
-			titleNode.style.pointerEvents = "none";
+			if (!titleNode.classList.contains("imgk-plugin-hidden")) {
+				titleNode.classList.add("imgk-plugin-hidden");
+			}
+
+			// titleNode.style.height = "0px";
+			// titleNode.style.opacity = "0";
+			// titleNode.style.pointerEvents = "none";
 		}
 
 		// disable navigate to file on click
-		if (context.plugin.settings.disbleClickToNavigate) {
+		if (context.plugin.settingsUtil.getSettingsRef().overrideDragAndDrop) {
 			internalEmbed.onClickEvent(
 				(e) => {
 					console.log;
@@ -252,25 +259,45 @@ export function linkedImgHandler(
 		} else {
 			drawImageOnElement(context, internalEmbed, img, srcFile);
 		}
-		attachImgFollower(context, img, srcFile, observer);
+
+		if (context.plugin.settingsUtil.getSettingsRef().overrideDragAndDrop) {
+			attachImgFollower(context, img, srcFile, observer);
+		}
 	}
 }
 
+function syncAttr(attr: string, srcEl: HTMLElement, dstEl: HTMLElement) {
+	if (srcEl.hasAttribute(attr)) {
+		const srcValue = srcEl.getAttribute(attr);
+		if (srcValue !== null && srcValue !== undefined) {
+			if (
+				!dstEl.hasAttribute(attr) ||
+				dstEl.getAttribute(attr) !== srcValue
+			) {
+				dstEl.setAttribute(attr, srcValue);
+			}
+		} else if (dstEl.hasAttribute(attr)) {
+			dstEl.removeAttribute(attr);
+		}
+	} else if (dstEl.hasAttribute(attr)) {
+		dstEl.removeAttribute(attr);
+	}
+}
 export function applyContainerMdSize(
-	apply: boolean,
+	followWidthAndHeight: boolean,
 	containerEl: HTMLElement,
 	targetElement: HTMLElement
 ) {
-	if (apply) {
-		// [[IMAGE | 100]] markdown will represent as container width attribute.
-		const containerWidth = containerEl.getAttribute("width");
-		if (containerWidth) {
-			targetElement.setAttribute("width", containerWidth);
-		} else {
+	if (followWidthAndHeight) {
+		syncAttr("width", containerEl, targetElement);
+		syncAttr("height", containerEl, targetElement);
+	} else {
+		if (targetElement.hasAttribute("width")) {
 			targetElement.removeAttribute("width");
 		}
-	} else {
-		targetElement.removeAttribute("width");
+		if (targetElement.hasAttribute("height")) {
+			targetElement.removeAttribute("height");
+		}
 	}
 }
 
@@ -297,24 +324,52 @@ export function drawImageOnElement(
 	PIE.magick()
 		.drawOnCanvas(context, targetFile, cv)
 		.then(() => {
-			cv!.toBlob((blob) => {
-				if (blob) {
-					const burl = URL.createObjectURL(blob);
-					img!.src = burl;
-
-					setCache(targetFile, burl);
-
-					// attachImgFollower(context, img!, targetFile, observer);
-				}
-			});
-			// img!.src = canvasElement.toDataURL();
-			// canvasElement.remove();
-			cv!.remove();
+			setImgTagImageWithCache(
+				context.plugin.settingsUtil.getSettingsRef().useBlob,
+				targetFile,
+				img,
+				cv!
+			)
+				.then(() => {
+					cv!.remove();
+				})
+				.catch((err) => {
+					cv!.remove();
+				});
 		})
 		.catch((err) => {
 			cv!.remove();
 		});
 }
+
+export const setImgTagImageWithCache = (
+	useBlob: boolean,
+	file: TFile,
+	imgEl: HTMLImageElement,
+	canvasEl: HTMLCanvasElement
+): Promise<void> => {
+	return new Promise((resolve, reject) => {
+		try {
+			if (useBlob) {
+				canvasEl.toBlob((blob) => {
+					if (blob) {
+						const burl = URL.createObjectURL(blob);
+						imgEl.src = burl;
+						setCache(file, burl);
+					}
+					resolve();
+				});
+			} else {
+				const dataUrl: string = canvasEl.toDataURL();
+				imgEl.src = dataUrl;
+				setCache(file, dataUrl);
+				resolve();
+			}
+		} catch (err) {
+			resolve();
+		}
+	});
+};
 
 export function attachImgFollower(
 	context: MainPluginContext,
@@ -363,12 +418,15 @@ export function attachImgFollower(
 	imgOverlayEl.setAttribute("alt", file.path);
 
 	imgOverlayEl.addEventListener("dragstart", (e) => {
-		e.dataTransfer?.setData("line", file.path);
-		e.dataTransfer?.setData("link", file.path);
+		// e.dataTransfer?.setData("line", file.path);
+		// e.dataTransfer?.setData("link", file.path);
+		// e.dataTransfer?.setData("embeddable", file.path);
 		//this is important
 		e.dataTransfer?.setData("text/plain", `![[${file.path}]]`);
-		e.dataTransfer?.setData("src", `${file.path}`);
+		// e.dataTransfer?.setData("src", `${file.path}`);
 		e.dataTransfer?.setData("text/uri-list", file.path);
+		// e.dataTransfer?.setData("file", file.path);
+		// e.dataTransfer?.setData("files", file.path);
 	});
 
 	const realBoundFoundingDot = imgParent.createDiv({
@@ -409,6 +467,20 @@ export function attachImgFollower(
 			width: imgDomRect.width,
 			height: imgDomRect.height,
 		};
+
+		const offsetWidth = img.offsetWidth;
+		const offsetHeight = img.offsetHeight;
+
+		//detect html element is scaled!
+		if (imgRect.width !== offsetWidth || imgRect.height !== offsetHeight) {
+			const scaleX = offsetWidth / imgRect.width;
+			const scaleY = offsetHeight / imgRect.height;
+
+			imgRect.x = imgRect.x * scaleX;
+			imgRect.y = imgRect.y * scaleY;
+			imgRect.width = imgRect.width * scaleX;
+			imgRect.height = imgRect.height * scaleY;
+		}
 
 		if (lastUsedImgRect && isEqual(lastUsedImgRect, imgRect)) {
 			return;
@@ -452,6 +524,9 @@ export function attachImgFollower(
 		}
 	};
 
+	img.addEventListener("load", (evt) => {
+		checkAndRunFollowImg();
+	});
 	resizeOb = new ResizeObserver((entries) => {
 		checkAndRunFollowImg();
 	});

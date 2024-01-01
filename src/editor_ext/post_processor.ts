@@ -28,7 +28,8 @@ export const getMarkdownPostProcessor = (context: MainPluginContext) => {
 		const ob: ImgkMutationObserver = new ImgkMutationObserver(el, {
 			childList: true,
 			subtree: true,
-			attributes: true,
+			// this may call infinity loop
+			// attributes: true,
 		});
 		ob.addListener(moCallback);
 

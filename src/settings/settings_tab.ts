@@ -25,14 +25,16 @@ import {
 	ImgkTextFilter,
 	DEFAULT_FILE_NAME_PREFIX,
 	DEFAULT_FILE_NAME_SUFFIX,
+	DEFAULT_EXPORT_SUPPORTED_FORMATS,
 } from "./settings";
 import { cloneDeep } from "lodash-es";
 import { ImgkPluginExportDialog } from "../dialogs/export_opt_dialog";
 import { normalizeObsidianDir } from "../utils/obsidian_path";
-import { debug } from "loglevel";
+import { debug, getLevel, getLogger } from "loglevel";
 
 const ClsGroupMember = "imgk-settings-group-member";
 const ClsGroupMemberLast = "imgk-settings-group-member-last";
+const ClsGroupMemberFirst = "imgk-settings-group-member-first";
 
 const asFileFormatsArray = (text: string) => {
 	return text
@@ -110,7 +112,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 			warnSet?.setDesc(warnedArr.join(", "));
 		};
 
-		ImgkPluginSettingTab.createFormatEditSets(
+		const supportedFormatSets = ImgkPluginSettingTab.createFormatEditSets(
 			containerEl,
 			"Supported formats",
 			"The plugin will support viewing the image formats listed here. Additionally, you can try any image format by adding it to the list with comma separation. If you attempt to remove a format from the list, restart the Obsidian application to apply the changes.",
@@ -124,7 +126,11 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 			(value: string) => {
 				refreshWarnings();
 			}
-		).setting[1].settingEl.addClass(ClsGroupMemberLast);
+		);
+
+		supportedFormatSets.setting[1].settingEl.classList.add(
+			ClsGroupMemberLast
+		);
 
 		warnSet = new Setting(containerEl);
 		warnSet.setName(
@@ -134,12 +140,81 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 		warnSet.settingEl.classList.add("imgk-no-border");
 		refreshWarnings();
 
+		const markdownSupportSet = new Setting(containerEl);
+		markdownSupportSet.setName("Markdown support");
+		markdownSupportSet.setDesc(
+			"Here are some options to make the supported image formats in the plugin behave like default Obsidian image formats in markdown, such as png, jpg, webp."
+		);
+
+		markdownSupportSet.setHeading();
+
+		new Setting(containerEl)
+			.setName("Inline link rendering")
+			.setDesc(
+				"The markdown inline link, such as ![[...]], will be rendered."
+			)
+			.addToggle((comp) => {
+				comp.setValue(settings.renderMarkdownInlineLink);
+				comp.onChange((value) => {
+					settings.renderMarkdownInlineLink = value;
+				});
+			});
+
+		new Setting(containerEl)
+			.setName("HTML <img> tag rendering")
+			.setDesc(
+				`HTML <img> Tag Rendering: The <img> tag will be rendered with the file resource path in the "src" attribute, such as src="app://..../img.psd?xxxxxxx"`
+			)
+			.addToggle((comp) => {
+				comp.setValue(settings.renderMarkdownImgTag);
+				comp.onChange((value) => {
+					settings.renderMarkdownImgTag = value;
+				});
+			});
+
+		new Setting(containerEl)
+			.setName("Override drag and drop (experimental)")
+			.addToggle((comp) => {
+				comp.setValue(settings.overrideDragAndDrop);
+				comp.onChange((value) => {
+					settings.overrideDragAndDrop = value;
+				});
+			});
+
+		// new Setting(containerEl).setName("Use BLOB").addToggle((comp) => {
+		// 	comp.setValue(settings.useBlob);
+		// 	comp.onChange((value) => {
+		// 		settings.useBlob = value;
+		// 	});
+		// });
+
+		// AUTO EXPORT
+
 		const headingSet = new Setting(containerEl);
-		headingSet.setName("Auto Export");
+		headingSet.setName("Export");
 		headingSet.setDesc(
-			"Automatically export the images in the selected format when the original image is modified or created."
+			"Broader supported image formats, such as PNG, JPG, and WebP, are always better in markdown."
 		);
 		headingSet.setHeading();
+
+		const exportMenuSupportedSets =
+			ImgkPluginSettingTab.createFormatEditSets(
+				containerEl,
+				"Instant export file types",
+				"Easily access the image export dialog from the file context menu or a command if the active file's extension is included in the list. You can try different image formats by adding them to the list using commas for separation.",
+				"e.g., psd, tiff, xcf",
+				false,
+				() => settings.exportMenuSupportedFormats,
+				() => DEFAULT_EXPORT_SUPPORTED_FORMATS,
+				(value: string[]) => {
+					settings.exportMenuSupportedFormats = value;
+				},
+				(value: string) => {}
+			);
+
+		exportMenuSupportedSets.setting[1].settingEl.addClass(
+			ClsGroupMemberLast
+		);
 
 		ImgkPluginSettingTab.createExportSets(
 			context,
@@ -733,6 +808,13 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 		settings: ImgkExportSettings[],
 		srcFilePath?: string
 	) {
+		const autoExportSet = new Setting(containerEl);
+		autoExportSet.setName("Auto export");
+		autoExportSet.setDesc(
+			"Automatically export the images in the selected format when the original image is modified or created."
+		);
+		autoExportSet.setHeading();
+
 		const listController = this.createList(
 			"Entries",
 			"",

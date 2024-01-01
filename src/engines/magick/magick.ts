@@ -19,6 +19,7 @@ import {
 	ImgkRuntimeExportSettings,
 } from "../../settings/settings_as_func";
 import { fileURLToPath } from "url";
+import { debug } from "loglevel";
 
 export class PluginMagickEngine implements PluginImageEngine {
 	draw(
@@ -118,6 +119,7 @@ export class PluginMagickEngine implements PluginImageEngine {
 	): Promise<string> {
 		return new Promise(async (resolve, reject) => {
 			if (!forcedExport && exportDstInfo.isLatest) {
+				debug(`skip export ${exportDstInfo.path}`);
 				resolve(exportDstInfo.path);
 				return;
 			}

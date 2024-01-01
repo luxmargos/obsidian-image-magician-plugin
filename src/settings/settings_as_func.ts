@@ -12,8 +12,7 @@ import {
 import {
 	lowerCasedExtNameWithoutDot,
 	nonDotDirName,
-} from "src/utils/obsidian_path";
-import { cloneDeep } from "lodash-es";
+} from "../utils/obsidian_path";
 import * as pb from "path-browserify";
 
 const resolveSizeNum = (num?: number): number | undefined => {

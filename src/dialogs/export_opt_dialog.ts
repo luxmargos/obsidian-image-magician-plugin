@@ -2,6 +2,7 @@ import {
 	ButtonComponent,
 	ExtraButtonComponent,
 	Modal,
+	Notice,
 	Setting,
 	TFile,
 } from "obsidian";
@@ -9,14 +10,9 @@ import { MainPluginContext } from "../context";
 import { ImgkPluginSettingTab } from "../settings/settings_tab";
 import { ImgkExportSettings, ImgkPluginSettings } from "../settings/settings";
 import { debug } from "loglevel";
-import { PIE } from "src/engines/imgEngines";
-import { findValutFile } from "src/vault_util";
-import { genExportPath } from "src/export_settings";
-import { exportImage } from "src/exporter";
-import {
-	convertAllExportSettingsToRuntime,
-	convertExportSettingsToRuntime,
-} from "src/settings/settings_as_func";
+import { findValutFile } from "../vault_util";
+import { exportImage } from "../exporter";
+import { convertExportSettingsToRuntime } from "../settings/settings_as_func";
 
 const ClsGroupMember = "imgk-settings-group-member";
 const ClsGroupMemberLast = "imgk-settings-group-member-last";
@@ -58,7 +54,7 @@ export class ImgkPluginExportDialog extends Modal {
 		if (!this.srcPath) {
 			this.titleEl.setText("Export settings");
 		} else {
-			this.titleEl.setText(`Export options: ${this.srcPath}`);
+			this.titleEl.setText(`Export options`);
 		}
 	}
 
@@ -134,6 +130,8 @@ export class ImgkPluginExportDialog extends Modal {
 				this.contentEl,
 				this.exportSettings
 			);
+		} else {
+			new Setting(this.contentEl).setName(`Source: ${this.srcPath}`);
 		}
 
 		let exportPathSetReturns: {
@@ -212,14 +210,18 @@ export class ImgkPluginExportDialog extends Modal {
 						)
 							.then((path) => {
 								debug(
-									"export complate : ",
+									"export complete : ",
 									srcFile.path,
 									"=>",
 									path
 								);
+
+								const message = `Exporte successful: "${this.srcPath}" as "${path}"`;
+								new Notice(message);
 							})
 							.catch((err) => {
 								debug(err);
+								new Notice(`Export failed: ${this.srcPath}`);
 							})
 							.finally(() => {});
 					}

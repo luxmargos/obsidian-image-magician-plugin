@@ -15,7 +15,10 @@ import { ImgkPluginSettingTab } from "./settings/settings_tab";
 import { exportFormatMap } from "./export_settings";
 import { ImgkPluginExportDialog } from "./dialogs/export_opt_dialog";
 import { getCache, setCache } from "./img_cache";
-import { attachImgFollower } from "./editor_ext/img_post_processor";
+import {
+	attachImgFollower,
+	setImgTagImageWithCache,
+} from "./editor_ext/img_post_processor";
 
 export const VIEW_TYPE_IMGK_PLUGIN = "imgk-plugin-view";
 export class ImgkPluginFileView extends EditableFileView {
@@ -62,17 +65,66 @@ export class ImgkPluginFileView extends EditableFileView {
 
 	protected onOpen(): Promise<void> {
 		return new Promise((resolve, _reject) => {
-			resolve();
-		});
-	}
-	protected onClose(): Promise<void> {
-		return new Promise((resolve, _reject) => {
+			this.contentEl.empty();
 			resolve();
 		});
 	}
 
+	protected onClose(): Promise<void> {
+		return new Promise((resolve, _reject) => {
+			this.cleraMainObDisconnector();
+			resolve();
+		});
+	}
+
+	private mainObDisconnector?: () => void;
+	private cleraMainObDisconnector() {
+		if (this.mainObDisconnector !== undefined) {
+			this.mainObDisconnector();
+			this.mainObDisconnector = undefined;
+		}
+	}
+
 	onLoadFile(file: TFile): Promise<void> {
 		return new Promise(async (resolve, reject) => {
+			this.contentEl.empty();
+			const imgElement = await this.loadImage(file);
+			resolve();
+
+			if (
+				imgElement &&
+				this.context.plugin.settingsUtil.getSettingsRef()
+					.overrideDragAndDrop
+			) {
+				if (this.contentEl.isConnected) {
+					attachImgFollower(this.context, imgElement, file);
+				} else {
+					this.mainObDisconnector =
+						this.context.plugin.mainObserver.addListener(() => {
+							if (this.contentEl.isConnected) {
+								this.cleraMainObDisconnector();
+								attachImgFollower(
+									this.context,
+									imgElement,
+									file
+								);
+							}
+						});
+				}
+			}
+		});
+	}
+
+	onUnloadFile(file: TFile): Promise<void> {
+		return new Promise(async (resolve, reject) => {
+			this.cleraMainObDisconnector();
+			resolve();
+		});
+	}
+
+	loadImage(file: TFile): Promise<HTMLImageElement | undefined> {
+		return new Promise(async (resolve, reject) => {
+			console.log("load image", this.contentEl.isConnected);
 			this.contentEl.empty();
 
 			const imgContainer = this.contentEl.createDiv({
@@ -87,8 +139,7 @@ export class ImgkPluginFileView extends EditableFileView {
 				canvas?.remove();
 				canvas = undefined;
 				this.showUi(imgContainer);
-				attachImgFollower(this.context, imgElement, file);
-				resolve();
+				resolve(imgElement);
 			};
 
 			try {
@@ -105,24 +156,18 @@ export class ImgkPluginFileView extends EditableFileView {
 					this.contentEl
 				);
 
-				canvas.toBlob((blob) => {
-					if (blob) {
-						const burl = URL.createObjectURL(blob);
-						imgElement.src = burl;
-						setCache(file, burl);
-						finishJob();
-					}
-				});
+				await setImgTagImageWithCache(
+					this.context.plugin.settingsUtil.getSettingsRef().useBlob,
+					file,
+					imgElement,
+					canvas
+				);
 
-				// display with dataUrl
-				// const dataUrl: string = canvas.toDataURL();
-				// imgElement.src = dataUrl;
-				// setCache(file, dataUrl);
-				// finishJob();
+				finishJob();
 			} catch (err) {
 				canvas?.remove();
 				createErrorEl(this.contentEl, file.path, err);
-				resolve();
+				resolve(undefined);
 			}
 		});
 	}

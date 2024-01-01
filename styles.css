@@ -110,9 +110,14 @@ img.imgk-plugin-item:not([width]) {
 .setting-item.imgk-no-border {
 	border: none;
 }
+
 .setting-item.imgk-settings-group-member {
 	border: none;
 	padding: 0.2em 0;
+}
+
+.setting-item.imgk-settings-group-member-first {
+	padding-bottom: 0.2em;
 }
 
 .setting-item.imgk-settings-group-member-last {
@@ -194,5 +199,11 @@ img.imgk-plugin-item:not([width]) {
 
 .imgk-disabled {
 	opacity: 0.3;
+	pointer-events: none;
+}
+
+.file-embed-title.imgk-plugin-hidden {
+	height: 0px;
+	opacity: 0;
 	pointer-events: none;
 }

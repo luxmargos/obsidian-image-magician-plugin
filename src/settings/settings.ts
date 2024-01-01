@@ -7,8 +7,7 @@ import {
 	ImgkRuntimeExportSettings,
 	convertAllExportSettingsToRuntime,
 } from "./settings_as_func";
-import { isTFile } from "src/vault_util";
-import { format } from "path";
+import { isTFile } from "../vault_util";
 
 export enum ImgkSizeAdjustType {
 	Fixed = 0,
@@ -73,7 +72,7 @@ export interface ImgkExportSettings {
 	pathOpts: ImgkExportPath;
 }
 
-const DEFAULT_EXPORT_SUPPORTED_FORMATS = [
+export const DEFAULT_EXPORT_SUPPORTED_FORMATS = [
 	"psd",
 	"xcf",
 	"tif",
@@ -183,13 +182,16 @@ export const DEFAULT_EXPORT_SETTINGS: ImgkExportSettings = {
 // Remember to rename these classes and interfaces!
 export interface ImgkPluginSettings {
 	supportedFormats: string[];
-
-	exportSupportedFormats: string[];
+	exportMenuSupportedFormats: string[];
 
 	autoExportList: ImgkExportSettings[];
 	instantExport: ImgkExportSettings;
 
-	supportAutoImgSrcLink: boolean;
+	renderMarkdownInlineLink: boolean;
+	renderMarkdownImgTag: boolean;
+	overrideDragAndDrop: boolean;
+	useBlob: boolean;
+
 	viewTreatVerticalOverflow: boolean;
 
 	trackRename: boolean;
@@ -201,8 +203,6 @@ export interface ImgkPluginSettings {
 	previewLink: boolean;
 	/** support obsidian's markdown based imgage size format. e.g., [[IMAGE | IMAGE_SIZE]]*/
 	supportMdImageSizeFormat: boolean;
-	disbleClickToNavigate: boolean;
-	previewImgTag: boolean;
 }
 
 export const getWarnList = () => {
@@ -216,17 +216,19 @@ export const getWarnList = () => {
 export const DEFAULT_SETTINGS: ImgkPluginSettings = {
 	supportedFormats: getDefaultSupportedFormats(),
 
-	exportSupportedFormats: cloneDeep(DEFAULT_EXPORT_SUPPORTED_FORMATS),
+	exportMenuSupportedFormats: cloneDeep(DEFAULT_EXPORT_SUPPORTED_FORMATS),
 	autoExportList: [],
 	instantExport: cloneDeep(DEFAULT_EXPORT_SETTINGS),
 
-	supportAutoImgSrcLink: true,
+	renderMarkdownInlineLink: true,
+	renderMarkdownImgTag: true,
+	overrideDragAndDrop: true,
+	useBlob: true,
+
 	viewTreatVerticalOverflow: false,
 
 	previewLink: true,
 	supportMdImageSizeFormat: true,
-	disbleClickToNavigate: true,
-	previewImgTag: true,
 
 	trackRename: true,
 	trackDelete: true,
@@ -278,8 +280,8 @@ export class SettingsUtil {
 
 	generateRuntimeExportSupportedFormats = () => {
 		this.runtimeExportSupportedFormats = new Set([
-			...this.settings.exportSupportedFormats,
-			...this.settings.exportSupportedFormats.map((value) =>
+			...this.settings.exportMenuSupportedFormats,
+			...this.settings.exportMenuSupportedFormats.map((value) =>
 				value.toUpperCase()
 			),
 		]);
@@ -314,6 +316,7 @@ export class SettingsUtil {
 		}
 		return result;
 	};
+
 	getRuntimeAutoExports = () => {
 		return this.runtimeAutoExports;
 	};
