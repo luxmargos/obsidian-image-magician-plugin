@@ -90,7 +90,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 		containerEl: HTMLElement,
 		settings: ImgkPluginSettings
 	) {
-		new Setting(containerEl).setName("General").setHeading();
+		// new Setting(containerEl).setName("General").setHeading();
 
 		let warnedArr: string[] = [];
 		let warnSet: Setting;
@@ -128,6 +128,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 			}
 		);
 
+		supportedFormatSets.setting[0].setHeading();
 		supportedFormatSets.setting[1].settingEl.classList.add(
 			ClsGroupMemberLast
 		);
@@ -138,12 +139,13 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 		);
 		warnSet.settingEl.classList.add("imgk-warning");
 		warnSet.settingEl.classList.add("imgk-no-border");
+		warnSet.settingEl.classList.add(ClsGroupMemberLast);
 		refreshWarnings();
 
 		const markdownSupportSet = new Setting(containerEl);
 		markdownSupportSet.setName("Markdown support");
 		markdownSupportSet.setDesc(
-			"Here are some options to make the supported image formats in the plugin behave like default Obsidian image formats in markdown, such as png, jpg, webp."
+			"Here are some options to make the supported image formats in the plugin behave like default Obsidian image formats in markdown."
 		);
 
 		markdownSupportSet.setHeading();
@@ -193,7 +195,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 		const headingSet = new Setting(containerEl);
 		headingSet.setName("Export");
 		headingSet.setDesc(
-			"Broader supported image formats, such as PNG, JPG, and WebP, are always better in markdown."
+			"Broader supported image formats, such as png, jpg, and webp, are always better in markdown."
 		);
 		headingSet.setHeading();
 

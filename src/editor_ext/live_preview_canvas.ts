@@ -178,7 +178,7 @@ export const livePreviewExtension = (context: MainPluginContext) =>
 					// 	String(srcFile.stat.mtime)
 					// );
 
-					PIE.magick()
+					PIE.getEngine(srcFile.extension)
 						.drawOnCanvas(context, srcFile, cv)
 						.then(
 							() => {

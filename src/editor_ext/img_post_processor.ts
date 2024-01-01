@@ -236,7 +236,6 @@ export function linkedImgHandler(
 		if (context.plugin.settingsUtil.getSettingsRef().overrideDragAndDrop) {
 			internalEmbed.onClickEvent(
 				(e) => {
-					console.log;
 					// e.stopImmediatePropagation();
 					e.stopPropagation();
 					e.preventDefault();
@@ -321,7 +320,7 @@ export function drawImageOnElement(
 		});
 	}
 
-	PIE.magick()
+	PIE.getEngine(targetFile.extension)
 		.drawOnCanvas(context, targetFile, cv)
 		.then(() => {
 			setImgTagImageWithCache(

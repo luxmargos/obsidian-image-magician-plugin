@@ -7,7 +7,7 @@ import { PIE } from "./engines/imgEngines";
 export const exportImage = (
 	context: MainPluginContext,
 	refEl: HTMLElement,
-	file: TFile,
+	srcFile: TFile,
 	specificDst: string | undefined,
 	settings: ImgkRuntimeExportSettings,
 	forcedExport: boolean
@@ -15,7 +15,7 @@ export const exportImage = (
 	return new Promise(async (resolve, reject) => {
 		const exportData = resolveExportDstInfo(
 			context,
-			file,
+			srcFile,
 			settings.data,
 			specificDst
 		);
@@ -25,8 +25,8 @@ export const exportImage = (
 			return;
 		}
 
-		PIE.magick()
-			.export(context, file, settings, refEl, forcedExport, exportData)
+		PIE.getEngine(srcFile.extension)
+			.export(context, srcFile, settings, refEl, forcedExport, exportData)
 			.then((path) => {
 				resolve(path);
 			})

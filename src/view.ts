@@ -124,7 +124,6 @@ export class ImgkPluginFileView extends EditableFileView {
 
 	loadImage(file: TFile): Promise<HTMLImageElement | undefined> {
 		return new Promise(async (resolve, reject) => {
-			console.log("load image", this.contentEl.isConnected);
 			this.contentEl.empty();
 
 			const imgContainer = this.contentEl.createDiv({
@@ -150,7 +149,7 @@ export class ImgkPluginFileView extends EditableFileView {
 					return;
 				}
 
-				canvas = await PIE.magick().draw(
+				canvas = await PIE.getEngine(file.extension).draw(
 					this.context,
 					file,
 					this.contentEl

@@ -13,17 +13,64 @@ import {
 	ImageAdjFunc,
 	ImgkRuntimeExportSettings,
 } from "../../settings/settings_as_func";
-import { parse } from "path";
+import { debug } from "loglevel";
+
+function resizeAndFlipImageData(
+	refEl: HTMLElement | undefined | null,
+	cv: HTMLCanvasElement,
+	newWidth: number,
+	newHeight: number,
+	flipHorizontal: boolean,
+	flipVertical: boolean
+) {
+	let canvas: HTMLCanvasElement | undefined | null;
+
+	if (refEl) {
+		canvas = refEl.createEl("canvas", {
+			cls: "imgk-plugin-export-canvas",
+		});
+	} else {
+		canvas = document.createEl("canvas", {
+			cls: "imgk-plugin-export-canvas",
+		});
+	}
+
+	var ctx: CanvasRenderingContext2D | null = canvas.getContext("2d");
+	if (!ctx) {
+		canvas.remove();
+		return;
+	}
+
+	// Set the canvas size to the scaled dimensions
+	canvas.width = newWidth;
+	canvas.height = newHeight;
+
+	// // Flip the context if needed
+	if (flipHorizontal || flipVertical) {
+		ctx.translate(
+			flipHorizontal ? newWidth : 0,
+			flipVertical ? newHeight : 0
+		);
+		ctx.scale(flipHorizontal ? -1 : 1, flipVertical ? -1 : 1);
+	}
+
+	ctx.drawImage(cv, 0, 0, newWidth, newHeight);
+
+	// Get the modified ImageData from the canvas
+	const imgData = ctx.getImageData(0, 0, newWidth, newHeight);
+	canvas.remove();
+	return imgData;
+}
 
 export class PluginPsdEngine implements PluginImageEngine {
 	draw(
 		context: MainPluginContext,
 		imgFile: TFile,
-		el: HTMLElement,
+		refEl: HTMLElement,
 		imageAdjFunc?: ImageAdjFunc
 	): Promise<HTMLCanvasElement> {
 		return new Promise(async (resolve, reject) => {
-			const cv: HTMLCanvasElement = el.createEl("canvas", {
+			const cv: HTMLCanvasElement = refEl.createEl("canvas", {
 				cls: "imgk-plugin-export-canvas",
 			});
 
@@ -61,7 +108,14 @@ export class PluginPsdEngine implements PluginImageEngine {
 			try {
 				const buff: ArrayBuffer =
 					await context.plugin.app.vault.readBinary(psdTFile);
-				const parsedPsd = Psd.parse(buff);
+				const parsedPsd: Psd = Psd.parse(buff);
+
+				const compositeBuffer = await parsedPsd.composite();
+				let imageData = new ImageData(
+					compositeBuffer,
+					parsedPsd.width,
+					parsedPsd.height
+				);
 
 				let imgAdj: ImageAdj = {
 					width: parsedPsd.width,
@@ -70,25 +124,31 @@ export class PluginPsdEngine implements PluginImageEngine {
 					scaleY: 1,
 				};
 
+				cv.width = imgAdj.width;
+				cv.height = imgAdj.height;
+				canvasContext.putImageData(imageData, 0, 0);
+
 				if (imageAdjFunc) {
 					const imgSize: ImgkSize = {
 						x: parsedPsd.width,
 						y: parsedPsd.height,
 					};
 					imgAdj = imageAdjFunc(imgSize);
+					const newImageData = resizeAndFlipImageData(
+						cv.parentElement,
+						cv,
+						imgAdj.width,
+						imgAdj.height,
+						imgAdj.scaleX < 0,
+						imgAdj.scaleY < 0
+					);
+					if (newImageData) {
+						imageData = newImageData;
+						cv.width = imgAdj.width;
+						cv.height = imgAdj.height;
+						canvasContext.putImageData(imageData, 0, 0);
+					}
 				}
-
-				const compositeBuffer = await parsedPsd.composite();
-				const imageData = new ImageData(
-					compositeBuffer,
-					imgAdj.width,
-					imgAdj.height
-				);
-
-				// canvasElement.width = parsedPsd.width;
-				// canvasElement.height = parsedPsd.height;
-				canvasContext.putImageData(imageData, 0, 0);
-				canvasContext.scale(imgAdj.scaleX, imgAdj.scaleY);
 
 				resolve();
 			} catch (err) {
@@ -107,6 +167,7 @@ export class PluginPsdEngine implements PluginImageEngine {
 	): Promise<string> {
 		return new Promise<string>(async (resolve, reject) => {
 			if (!forcedExport && exportDstInfo.isLatest) {
+				debug(`skip export ${exportDstInfo.path}`);
 				resolve(exportDstInfo.path);
 				return;
 			}
@@ -128,6 +189,7 @@ export class PluginPsdEngine implements PluginImageEngine {
 					exportDstInfo.path,
 					exportDstInfo.file
 				);
+
 				canvasElement.remove();
 				resolve(exportDstInfo.path);
 			} catch (e) {
