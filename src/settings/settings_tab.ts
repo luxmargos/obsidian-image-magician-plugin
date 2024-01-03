@@ -31,6 +31,7 @@ import { cloneDeep } from "lodash-es";
 import { ImgkPluginExportDialog } from "../dialogs/export_opt_dialog";
 import { normalizeObsidianDir } from "../utils/obsidian_path";
 import { debug, getLevel, getLogger } from "loglevel";
+import { t } from "../i18n/t";
 
 const ClsGroupMember = "imgk-settings-group-member";
 const ClsGroupMemberLast = "imgk-settings-group-member-last";
@@ -114,9 +115,9 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 
 		const supportedFormatSets = ImgkPluginSettingTab.createFormatEditSets(
 			containerEl,
-			"Supported formats",
-			"The plugin will support viewing the image formats listed here. Additionally, you can try any image format by adding it to the list with comma separation. If you attempt to remove a format from the list, restart the Obsidian application to apply the changes.",
-			"e.g., psd, tiff, xcf",
+			t("SUPPORTED_FORMATS"),
+			t("SUPPORTED_FORMATS_DESC"),
+			t("FORMATS_PLACEHOLDER"),
 			false,
 			() => settings.supportedFormats,
 			() => getDefaultSupportedFormats(),
@@ -134,27 +135,21 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 		);
 
 		warnSet = new Setting(containerEl);
-		warnSet.setName(
-			"Warning: attempting to add default supported extensions in obsidian"
-		);
+		warnSet.setName(t("FORMATS_WARN"));
 		warnSet.settingEl.classList.add("imgk-warning");
 		warnSet.settingEl.classList.add("imgk-no-border");
 		warnSet.settingEl.classList.add(ClsGroupMemberLast);
 		refreshWarnings();
 
 		const markdownSupportSet = new Setting(containerEl);
-		markdownSupportSet.setName("Markdown support");
-		markdownSupportSet.setDesc(
-			"Here are some options to make the supported image formats in the plugin behave like default Obsidian image formats in markdown."
-		);
+		markdownSupportSet.setName(t("MD_SUPPORT"));
+		markdownSupportSet.setDesc(t("MD_SUPPORT_DESC"));
 
 		markdownSupportSet.setHeading();
 
 		new Setting(containerEl)
-			.setName("Inline link rendering")
-			.setDesc(
-				"The markdown inline link, such as ![[...]], will be rendered."
-			)
+			.setName(t("INLINE_LINK_RENDER"))
+			.setDesc(t("INLINE_LINK_RENDER_DESC"))
 			.addToggle((comp) => {
 				comp.setValue(settings.renderMarkdownInlineLink);
 				comp.onChange((value) => {
@@ -163,10 +158,8 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName("HTML <img> tag rendering")
-			.setDesc(
-				`HTML <img> Tag Rendering: The <img> tag will be rendered with the file resource path in the "src" attribute, such as src="app://..../img.psd?xxxxxxx"`
-			)
+			.setName(t("HTML_IMG_RENDER"))
+			.setDesc(t("HTML_IMG_RENDER_DESC"))
 			.addToggle((comp) => {
 				comp.setValue(settings.renderMarkdownImgTag);
 				comp.onChange((value) => {
@@ -175,7 +168,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName("Override drag and drop (experimental)")
+			.setName(t("OVERRIDE_DND"))
 			.addToggle((comp) => {
 				comp.setValue(settings.overrideDragAndDrop);
 				comp.onChange((value) => {
@@ -191,20 +184,17 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 		// });
 
 		// AUTO EXPORT
-
 		const headingSet = new Setting(containerEl);
-		headingSet.setName("Export");
-		headingSet.setDesc(
-			"Broader supported image formats, such as png, jpg, and webp, are always better in markdown."
-		);
+		headingSet.setName(t("EXPORT"));
+		headingSet.setDesc(t("EXPORT_DESC"));
 		headingSet.setHeading();
 
 		const exportMenuSupportedSets =
 			ImgkPluginSettingTab.createFormatEditSets(
 				containerEl,
-				"Instant export file types",
-				"Easily access the image export dialog from the file context menu or a command if the active file's extension is included in the list. You can try different image formats by adding them to the list using commas for separation.",
-				"e.g., psd, tiff, xcf",
+				t("INSTANT_EXPORT_FILE_TYPES"),
+				t("INSTANT_EXPORT_FILE_TYPES_DESC"),
+				t("FORMATS_PLACEHOLDER"),
 				false,
 				() => settings.exportMenuSupportedFormats,
 				() => DEFAULT_EXPORT_SUPPORTED_FORMATS,
@@ -226,10 +216,8 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 		);
 
 		new Setting(containerEl)
-			.setName("Rename exproted images on source file rename")
-			.setDesc(
-				"Exported images will be renamed when their source files are renamed."
-			)
+			.setName(t("AUTO_EXPORT_OPT_RENAME"))
+			.setDesc(t("AUTO_EXPORT_OPT_RENAME_DESC"))
 			.addToggle((comp) => {
 				comp.setValue(settings.trackRename);
 				comp.onChange((value) => {
@@ -238,14 +226,22 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName("Delete exported images on source file delete")
-			.setDesc(
-				"Exported images will be deleted when their source files are deleted."
-			)
+			.setName(t("AUTO_EXPORT_OPT_DELETE"))
+			.setDesc(t("AUTO_EXPORT_OPT_DELETE_DESC"))
 			.addToggle((comp) => {
 				comp.setValue(settings.trackDelete);
 				comp.onChange((value) => {
 					settings.trackDelete = value;
+				});
+			});
+
+		new Setting(containerEl).setName(t("MISCELLANEOUS")).setHeading();
+		new Setting(containerEl)
+			.setName(t("EXCALIDRAW_STRETCHED_EMBEDDING"))
+			.addToggle((comp) => {
+				comp.setValue(settings.excalidrawStretchEmbed);
+				comp.onChange((value) => {
+					settings.excalidrawStretchEmbed = value;
 				});
 			});
 	}
@@ -257,7 +253,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 	) {
 		// new Setting(containerEl).setName("Export settings").setHeading();
 		new Setting(containerEl)
-			.setName("Name")
+			.setName(t("NAME"))
 			.addText((comp: TextComponent) => {
 				comp.setValue(settings.name);
 				comp.onChange((value) => {
@@ -291,7 +287,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 		let customPathSet: Setting;
 		let customPathComp: TextComponent;
 
-		const textPreviewSettings = "Path simulation";
+		const textPreviewSettings = t("PATH_SIMULATION");
 
 		const instantExportPathGetter = () => {
 			return customPathComp?.getValue() ?? "";
@@ -340,7 +336,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 						otherExtsStr = `, ${otherExts.join(", ")}`;
 					}
 					exportPreviewSrcSet?.setDesc(
-						`Source : ${testFilePath}${otherExtsStr}`
+						`${t("SOURCE")} : ${testFilePath}${otherExtsStr}`
 					);
 
 					const exportPathData = genExportPath(
@@ -360,12 +356,12 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 					exportPreviewSet?.settingEl.removeClass("imgk-warning");
 
 					exportPreviewDstSet?.setDesc(
-						`Destination : ${exportPathData.dst.path}`
+						`${t("DESTINATION")} : ${exportPathData.dst.path}`
 					);
 				} catch (error) {
 					exportPreviewSet?.setName(textPreviewSettings);
 					exportPreviewSet?.settingEl.addClass("imgk-warning");
-					exportPreviewSet?.setDesc("There are invalid settings.");
+					exportPreviewSet?.setDesc(t("INVALID_SETTINGS_MSG"));
 					exportPreviewSrcSet?.setDesc("");
 					exportPreviewDstSet?.setDesc("");
 				}
@@ -375,15 +371,13 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 
 		if (!isInstantMode) {
 			const sourceSet = new Setting(containerEl);
-			sourceSet.setName("Source");
+			sourceSet.setName(t("SOURCE"));
 			sourceSet.setHeading();
 
 			const sourceFolderSet = new Setting(containerEl);
-			sourceFolderSet.setName("Folder");
+			sourceFolderSet.setName(t("SOURCE_FOLDER"));
+			sourceFolderSet.setDesc(t("SOURCE_FOLDER_DESC"));
 
-			sourceFolderSet.setDesc(
-				"Specify the folder to include its children files in export entries, or leave it empty to affect all files in the vault."
-			);
 			sourceFolderSet.addText((comp: TextComponent) => {
 				comp.inputEl.classList.add("imgk-wide-input");
 				comp.setValue(settings.pathOpts.sourceDir);
@@ -395,8 +389,8 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 			});
 
 			new Setting(containerEl)
-				.setName("Recursive")
-				.setDesc("Includes sub-folder files recursively.")
+				.setName(t("RECURSIVE"))
+				.setDesc(t("RECURSIVE_DESC"))
 				.addToggle((comp) => {
 					comp.setValue(settings.pathOpts.recursiveSources);
 					comp.onChange((value) => {
@@ -406,9 +400,9 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 
 			ImgkPluginSettingTab.createFormatEditSets(
 				containerEl,
-				"Image format filter",
-				"Insert image formats of export target with comma separated list.",
-				"e.g., psd, tiff, xcf",
+				t("IMAGE_FORMAT_FILTER"),
+				t("IMAGE_FORMAT_FILTER_DESC"),
+				t("FORMATS_PLACEHOLDER"),
 				false,
 				() => settings.pathOpts.sourceExts,
 				() => [],
@@ -421,8 +415,9 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 			).setting[1].settingEl.addClass(ClsGroupMemberLast);
 
 			const listController = this.createList(
-				"Filters",
-				"You can export specific files with filter options.",
+				t("FILTERS"),
+				t("FILTERS_DESC"),
+				false,
 				containerEl,
 				settings.pathOpts.sourceFilters,
 				() => {
@@ -450,7 +445,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 			let builtInFiltersExpandButton: ExtraButtonComponent;
 			let builtInFiltersListDiv: HTMLElement;
 			let builtInFiltersSet: Setting;
-			const builtInFiltersName = "Built-in filters";
+			const builtInFiltersName = t("BUILT_IN_FILTERS");
 			const refreshBuiltInFiltersName = () => {
 				let activeCount = 0;
 				settings.pathOpts.builtInSourceFilters.forEach((item) => {
@@ -461,11 +456,13 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 
 				if (activeCount < 1) {
 					builtInFiltersSet.setName(
-						`${builtInFiltersName} (no activated items)`
+						`${builtInFiltersName} (${t("NO_ACTIVE_ITEMS")})`
 					);
 				} else {
 					builtInFiltersSet.setName(
-						`${builtInFiltersName} (${activeCount} items activated)`
+						`${builtInFiltersName} (${activeCount} ${t(
+							"ACTIVE_ITEMS"
+						)})`
 					);
 				}
 			};
@@ -479,9 +476,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 			};
 
 			builtInFiltersSet = new Setting(containerEl)
-				.setDesc(
-					"Filters to enhance auto-export stability. You can enable or disable each setting individually."
-				)
+				.setDesc(t("BUILT_IN_FILTERS_DESC"))
 				.addExtraButton((comp) => {
 					builtInFiltersExpandButton = comp;
 					comp.onClick(() => {
@@ -496,10 +491,8 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 			for (const filter of settings.pathOpts.builtInSourceFilters) {
 				const filterSet = new Setting(builtInFiltersListDiv);
 				if (filter.type === ImgkFileFilterType.DoubleExtsBlocker) {
-					filterSet.setName("Double extensions blocker");
-					filterSet.setDesc(
-						"Avoid export if source file has at least two extensions. The filter determine file is already exported from another source. e.g, 'MyImage.psd.exported.png'"
-					);
+					filterSet.setName(t("DOUBLE_EXTS_BLOCKER"));
+					filterSet.setDesc(t("DOUBLE_EXTS_BLOCKER_DESC"));
 				}
 
 				filterSet.addToggle((comp) => {
@@ -515,7 +508,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 		} // end of non-instant mode
 
 		dstSet = new Setting(containerEl);
-		dstSet.setName("Destination");
+		dstSet.setName(t("DESTINATION"));
 		dstSet.setHeading();
 
 		const refreshExportView = () => {
@@ -530,10 +523,8 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 			refreshExportPreview();
 		};
 		exportPathTypeSet = new Setting(containerEl);
-		exportPathTypeSet.setName("As relative folder");
-		exportPathTypeSet.setDesc(
-			"If turned on, all exported images will be generated relative to the its source file. Otherwise, they will be generated into the absolute folder."
-		);
+		exportPathTypeSet.setName(t("AS_RELATIVE_FOLDER"));
+		exportPathTypeSet.setDesc(t("AS_RELATIVE_FOLDER_DESC"));
 
 		exportPathTypeSet.addToggle((comp: ToggleComponent) => {
 			comp.setValue(pathOpts.asRelativePath);
@@ -545,7 +536,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 
 		exportDirAbsSet = new Setting(containerEl);
 		exportDirAbsSet
-			.setName("Folder (Absolute)")
+			.setName(t("FOLDER_ABSOLUTE"))
 			.addText((comp: TextComponent) => {
 				comp.inputEl.classList.add("imgk-wide-input");
 				comp.setValue(pathOpts.exportDirAbs);
@@ -557,7 +548,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 
 		exportDirRelativeSet = new Setting(containerEl);
 		exportDirRelativeSet
-			.setName("Folder (Relative)")
+			.setName(t("FOLDER_RELATIVE"))
 			.addText((comp: TextComponent) => {
 				comp.inputEl.classList.add("imgk-wide-input");
 				comp.setValue(pathOpts.exportDirRel);
@@ -615,7 +606,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 			);
 		};
 
-		customFileNameFormatSet.setName("File name format");
+		customFileNameFormatSet.setName(t("FILE_NAME_FORMAT"));
 		customFileNameFormatSet.addExtraButton((comp) => {
 			comp.setIcon("reset");
 			comp.onClick(() => {
@@ -646,7 +637,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 		};
 
 		fileNameFormatPrefixSet = new Setting(containerEl);
-		fileNameFormatPrefixSet.setName("Prefix");
+		fileNameFormatPrefixSet.setName(t("PREFIX"));
 		fileNameFormatPrefixSet.addExtraButton((comp) => {
 			comp.setIcon("reset");
 			comp.onClick(() => {
@@ -673,7 +664,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 		};
 
 		fileNameFormatSuffixSet = new Setting(containerEl);
-		fileNameFormatSuffixSet.setName("Suffix");
+		fileNameFormatSuffixSet.setName(t("SUFFIX"));
 		fileNameFormatSuffixSet.addExtraButton((comp) => {
 			comp.setIcon("reset");
 			comp.onClick(() => {
@@ -696,7 +687,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 
 		if (isInstantMode) {
 			customPathNameSet = new Setting(containerEl);
-			customPathNameSet.setName("Export as ...");
+			customPathNameSet.setName(t("EXPORT_AS"));
 			customPathNameSet.setHeading();
 
 			customPathSet = new Setting(containerEl);
@@ -776,7 +767,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 		subSet
 			.addExtraButton((comp: ExtraButtonComponent) => {
 				sourceFormatsResetBtn = comp;
-				comp.setIcon("reset").setTooltip("Reset");
+				comp.setIcon("reset").setTooltip(t("RESET"));
 				comp.onClick(() => {
 					resetSourecFormats();
 				});
@@ -811,20 +802,19 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 		srcFilePath?: string
 	) {
 		const autoExportSet = new Setting(containerEl);
-		autoExportSet.setName("Auto export");
-		autoExportSet.setDesc(
-			"Automatically export the images in the selected format when the original image is modified or created."
-		);
+		autoExportSet.setName(t("AUTO_EXPORT"));
+		autoExportSet.setDesc(t("AUTO_EXPORT_DESC"));
 		autoExportSet.setHeading();
 
 		const listController = this.createList(
 			"Entries",
 			"",
+			false,
 			containerEl,
 			settings,
 			() => {
 				const newExportSettings = cloneDeep(DEFAULT_EXPORT_SETTINGS);
-				newExportSettings.name = "Auto export entry";
+				newExportSettings.name = t("AUTO_EXPORT_ENTRY");
 				return newExportSettings;
 			},
 			(contEl, item, itemIndex) => {
@@ -921,11 +911,11 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 		onUpdate: () => void
 	) {
 		const imagePropsSet = new Setting(containerEl);
-		imagePropsSet.setName("Image options");
+		imagePropsSet.setName(t("IMAGE_OPTIONS"));
 		imagePropsSet.setHeading();
 
 		const exportFormatSet = new Setting(containerEl)
-			.setName("Format")
+			.setName(t("FORMAT"))
 			.addDropdown((comp: DropdownComponent) => {
 				for (const fm of exportFormatList) {
 					comp.addOption(fm.ext, fm.display ? fm.display : fm.ext);
@@ -968,12 +958,13 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 				cls: "imgk-settings-quality",
 			});
 		});
-		qualitySet.setName("Quality");
+		qualitySet.setName(t("QUALITY"));
 		// qualitySet.settingEl.classList.add(ClsGroupMember);
 
 		const listController = this.createList(
-			"Adjustments to image size",
-			"",
+			t("ADJS_IMG_SIZE"),
+			t("AJDS_IMG_SIZE_DESC"),
+			true,
 			containerEl,
 			settings.imgProps.sizeAdjustments,
 			() => {
@@ -1025,7 +1016,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 			comp.inputEl.type = "number";
 			comp.inputEl.min = "0";
 			comp.inputEl.classList.add("imgk-size-input");
-			comp.inputEl.placeholder = "width";
+			comp.inputEl.placeholder = t("WIDTH_S");
 			comp.setValue(obj.x?.toString() ?? "");
 			comp.onChange((value) => {
 				const num = Number(value);
@@ -1042,7 +1033,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 			comp.inputEl.inputMode = "numeric";
 			comp.inputEl.type = "number";
 			comp.inputEl.classList.add("imgk-size-input");
-			comp.inputEl.placeholder = "height";
+			comp.inputEl.placeholder = t("HEIGHT_S");
 			comp.setValue(obj.y?.toString() ?? "");
 			comp.onChange((value) => {
 				const num = Number(value);
@@ -1102,21 +1093,21 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 
 			comp.addOption(
 				ImgkFileFilterType.Includes.toString(),
-				"Contains text"
+				t("CONTAINS_TEXT")
 			);
 
 			comp.addOption(
 				ImgkFileFilterType.Excludes.toString(),
-				"Excludes text"
+				t("EXCLUDES_TEXT")
 			);
 
 			comp.addOption(
 				ImgkFileFilterType.RegexMatch.toString(),
-				"Regular expression (match)"
+				t("REG_EXP_MATH")
 			);
 			comp.addOption(
 				ImgkFileFilterType.RegexNonMatch.toString(),
-				"Regular expression (non-match)"
+				t("REG_EXP_NON_MATH")
 			);
 
 			comp.setValue(settings.type.toString());
@@ -1130,7 +1121,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 
 		mainSet.controlEl.createSpan({ cls: "imgk-fill-space" });
 		mainSet.addText((comp: TextComponent) => {
-			comp.inputEl.placeholder = "Pattern";
+			comp.inputEl.placeholder = t("PATTERN");
 			comp.setValue(settings.content);
 			comp.onChange((value) => {
 				settings.content = value;
@@ -1140,7 +1131,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 		mainSet.addButton((comp) => {
 			flagsCompForText = comp;
 			comp.setIcon("case-sensitive");
-			comp.setTooltip("Case sensitive");
+			comp.setTooltip(t("CASE_SENSITIVE"));
 			comp.onClick(() => {
 				settings.flags = settings.flags.length > 0 ? "" : "i";
 				refreshFlagsView();
@@ -1152,7 +1143,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 		mainSet.addText((comp: TextComponent) => {
 			flagsCompForRegex = comp;
 			comp.inputEl.classList.add("imgk-narrow-input");
-			comp.inputEl.placeholder = "Flags";
+			comp.inputEl.placeholder = t("FLAGS");
 			updateRegexFlags();
 			comp.onChange((value) => {
 				settings.flags = value.trim().toLowerCase();
@@ -1184,6 +1175,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 	static createList = <T>(
 		name: string,
 		desc: string,
+		hideDescOnEmpty: boolean,
 		containerEl: HTMLElement,
 		list: Array<T>,
 		createNew: () => T,
@@ -1214,7 +1206,17 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 			if (list.length > 0) {
 				mainSet.setName(name);
 			} else {
-				mainSet.setName(`${name} (empty)`);
+				mainSet.setName(`${name} (${t("EMPTY")})`);
+			}
+
+			if (hideDescOnEmpty) {
+				if (list.length > 0) {
+					mainSet.setDesc(desc);
+				} else {
+					mainSet.setDesc("");
+				}
+			} else {
+				mainSet.setDesc(desc);
 			}
 
 			list.forEach((item, itemIndex) => {

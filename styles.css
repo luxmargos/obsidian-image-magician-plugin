@@ -28,22 +28,6 @@ img.imgk-plugin-item:not([width]) {
 	max-width: 100%;
 }
 
-/* Treat vertical overflow */
-.workspace.imgk-plugin-treat-vertical-overflow
-	.workspace-leaf-content
-	.view-content
-	.image-container
-	img:not([height]) {
-	max-height: 100%;
-}
-
-.workspace.imgk-plugin-treat-vertical-overflow
-	.workspace-leaf-content
-	.view-content
-	.image-container:has(img:not([height])) {
-	height: 100%;
-}
-
 .view-content .imgk-view-tools {
 	/* position: absolute; */
 	background-color: blue;
@@ -207,3 +191,41 @@ img.imgk-plugin-item:not([width]) {
 	opacity: 0;
 	pointer-events: none;
 }
+
+/* In excalidraw, treat vertical overflow. */
+.workspace.imgk-plugin-treat-vertical-overflow
+	.workspace-leaf-content
+	.excalidraw__embeddable-container
+	.image-container
+	img.imgk-plugin-item {
+	max-height: 100%;
+	max-width: 100%;
+	width: 100%;
+	height: 100%;
+}
+
+.workspace.imgk-plugin-treat-vertical-overflow
+	.workspace-leaf-content
+	.view-content
+	.excalidraw__embeddable-container
+	.image-container:has(img.imgk-plugin-item) {
+	height: 100%;
+	width: 100%;
+}
+
+/* .workspace.imgk-plugin-treat-vertical-overflow
+	.workspace-leaf-content
+	.excalidraw__embeddable-container
+	.image-container
+	img:not([height]) {
+	max-height: 100%;
+	max-width:100%;
+}
+
+.workspace.imgk-plugin-treat-vertical-overflow
+	.workspace-leaf-content
+	.view-content
+	.excalidraw__embeddable-container
+	.image-container:has(img:not([height])) {
+	height: 100%;
+} */

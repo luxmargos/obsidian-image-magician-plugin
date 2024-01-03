@@ -1,12 +1,4 @@
-import {
-	FileSystemAdapter,
-	MarkdownPostProcessorContext,
-	Modal,
-	TFile,
-	ViewCreator,
-	WorkspaceLeaf,
-	normalizePath,
-} from "obsidian";
+import { Modal, Plugin, TFile, ViewCreator, WorkspaceLeaf } from "obsidian";
 import * as psd from "./engines/psd/psd";
 import * as magick from "./engines/magick/magick";
 import { livePreviewExtension } from "./editor_ext/live_preview";
@@ -23,14 +15,15 @@ import { VaultHandler } from "./valut_handler";
 import { ImgkPluginFileView, VIEW_TYPE_IMGK_PLUGIN } from "./view";
 import { getMarkdownPostProcessor } from "./editor_ext/post_processor";
 import { Magick } from "@imagemagick/magick-wasm";
-import { ImgkPluginSettingsDialog } from "./dialogs/plugin_settings_dialog";
+
 import { PluginName } from "./consts/main";
 import { debug, info, log, setDefaultLevel, setLevel } from "loglevel";
-import { error } from "console";
+
 import { ImgkMutationObserver } from "./editor_ext/mutation_ob";
-import { handleImg } from "./editor_ext/img_post_processor";
+
 import { ImgkPluginExportDialog } from "./dialogs/export_opt_dialog";
-import { asTFile, isTFile } from "./vault_util";
+import { isTFile } from "./vault_util";
+import { t } from "./i18n/t";
 
 export default class ImgMagicianPlugin extends MainPlugin {
 	settings: ImgkPluginSettings;
@@ -60,7 +53,7 @@ export default class ImgMagicianPlugin extends MainPlugin {
 			try {
 				this.registerPluginExtensions();
 
-				if (this.settings.viewTreatVerticalOverflow) {
+				if (this.settings.excalidrawStretchEmbed) {
 					this.app.workspace.containerEl.classList.add(
 						"imgk-plugin-treat-vertical-overflow"
 					);
@@ -94,6 +87,7 @@ export default class ImgMagicianPlugin extends MainPlugin {
 	private logImageMagickVersion() {
 		info(Magick.imageMagickVersion);
 	}
+
 	private dumpImageMagickFormats() {
 		let listStr: string = "";
 		for (const fm of Magick.supportedFormats) {
@@ -111,10 +105,8 @@ export default class ImgMagicianPlugin extends MainPlugin {
 	}
 
 	async onload() {
-		// setDefaultLevel("DEBUG");
-		// setDefaultLevel("INFO");
-		// setLevel("INFO");
-		setLevel("DEBUG");
+		setLevel("INFO");
+		// setLevel("DEBUG");
 
 		this._mainObserver = new ImgkMutationObserver(document.body, {
 			childList: true,
@@ -173,7 +165,7 @@ export default class ImgMagicianPlugin extends MainPlugin {
 
 		this.addCommand({
 			id: "imgk-plugin-export-image",
-			name: "Open image export dialog",
+			name: t("OPEN_IMAGE_EXPORT_DIALOG"),
 
 			checkCallback: (checking: boolean) => {
 				const activeFile = this.app.workspace.getActiveFile();
@@ -203,6 +195,22 @@ export default class ImgMagicianPlugin extends MainPlugin {
 			},
 		});
 
+		this.addCommand({
+			id: "imgk-plugin-process-auto-export",
+			name: t("PROCESS_AUTO_EXPORT_SETTINGS"),
+			callback: () => {
+				this.vaultHandler.fullScan(false);
+			},
+		});
+
+		this.addCommand({
+			id: "imgk-plugin-process-auto-export-forced",
+			name: t("PROCESS_AUTO_EXPORT_SETTINGS_FORCED"),
+			callback: () => {
+				this.vaultHandler.fullScan(true);
+			},
+		});
+
 		this.registerEvent(
 			this.app.workspace.on("file-menu", (menu, file) => {
 				if (!isTFile(file)) {
@@ -218,7 +226,7 @@ export default class ImgMagicianPlugin extends MainPlugin {
 				}
 
 				menu.addItem((item) => {
-					item.setTitle("Open image export dialog")
+					item.setTitle(t("OPEN_IMAGE_EXPORT_DIALOG"))
 						.setIcon("image")
 						.onClick(async () => {
 							new ImgkPluginExportDialog(
@@ -286,12 +294,12 @@ export default class ImgMagicianPlugin extends MainPlugin {
 		if (newFailedExts.length > 0) {
 			const errorDialog = new Modal(this.app);
 			errorDialog.titleEl.setText(
-				`${PluginName}: Warning on plugin startup`
+				`${PluginName}: ${t("WARN_PLUGIN_START_UP")}`
 			);
 			errorDialog.contentEl.setText(
-				`Some file extensions, such as "[${newFailedExts.join(
-					", "
-				)}]" have failed to register in the obsidian app. The plugin will not support viewing them. Consider changing the ${PluginName} plugin settings.`
+				t("FORMAT_FAILED_EXT_LIST")
+					.replace("${list}", newFailedExts.join(", "))
+					.replace("${name}", PluginName)
 			);
 			errorDialog.open();
 		}
@@ -316,11 +324,14 @@ export default class ImgMagicianPlugin extends MainPlugin {
 		);
 	}
 
+	/**
+	 * TODO
+	 */
 	setupHoverLink() {
 		// internal-link quick preview
-		// this.registerHoverLinkSource(VIEW_TYPE_PSD, {
+		// this.registerHoverLinkSource(VIEW_TYPE_IMGK_PLUGIN, {
 		// 	defaultMod: false,
-		// 	display: "PSD Support Plugin",
+		// 	display: PluginName,
 		// });
 
 		try {
@@ -334,9 +345,9 @@ export default class ImgMagicianPlugin extends MainPlugin {
 
 			//I think this is alternative for hover-link event, but don't know how to use it.
 			// this.registerHoverLinkSource()
-			// this.registerHoverLinkSource(VIEW_TYPE_PSD, {
+			// this.registerHoverLinkSource(VIEW_TYPE_IMGK_PLUGIN, {
 			// 	defaultMod: false,
-			// 	display: VIEW_TYPE_PSD,
+			// 	display: VIEW_TYPE_IMGK_PLUGIN,
 			// });
 		} catch (err) {}
 	}

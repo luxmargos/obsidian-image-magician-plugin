@@ -192,7 +192,7 @@ export interface ImgkPluginSettings {
 	overrideDragAndDrop: boolean;
 	useBlob: boolean;
 
-	viewTreatVerticalOverflow: boolean;
+	excalidrawStretchEmbed: boolean;
 
 	trackRename: boolean;
 	trackDelete: boolean;
@@ -225,7 +225,7 @@ export const DEFAULT_SETTINGS: ImgkPluginSettings = {
 	overrideDragAndDrop: true,
 	useBlob: true,
 
-	viewTreatVerticalOverflow: false,
+	excalidrawStretchEmbed: true,
 
 	previewLink: true,
 	supportMdImageSizeFormat: true,

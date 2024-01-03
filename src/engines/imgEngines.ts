@@ -1,5 +1,7 @@
 import { PluginImageEngine } from "./imgEngine";
 
+const psdEngineExts = new Set(["psd", "psb", "PSD", "PSB"]);
+
 export class PIE {
 	static magick(): PluginImageEngine {
 		return this._magick;
@@ -13,9 +15,10 @@ export class PIE {
 	static _psd: PluginImageEngine;
 
 	static getEngine(ext: string): PluginImageEngine {
-		if (ext === "psd" || ext === "psb") {
+		if (psdEngineExts.has(ext)) {
 			return this.psd();
 		}
+
 		return this.magick();
 	}
 }

@@ -13,6 +13,7 @@ import { debug } from "loglevel";
 import { findValutFile } from "../vault_util";
 import { exportImage } from "../exporter";
 import { convertExportSettingsToRuntime } from "../settings/settings_as_func";
+import { t } from "../i18n/t";
 
 const ClsGroupMember = "imgk-settings-group-member";
 const ClsGroupMemberLast = "imgk-settings-group-member-last";
@@ -52,9 +53,9 @@ export class ImgkPluginExportDialog extends Modal {
 		}
 
 		if (!this.srcPath) {
-			this.titleEl.setText("Export settings");
+			this.titleEl.setText(t("EXPORT_SETTINGS"));
 		} else {
-			this.titleEl.setText(`Export options`);
+			this.titleEl.setText(t("EXPORT_OPTIONS"));
 		}
 	}
 
@@ -75,23 +76,14 @@ export class ImgkPluginExportDialog extends Modal {
 
 				if (expandDetailSets) {
 					detailSetsToggleBtn?.setIcon("chevron-down");
-					tipSet.setDesc(
-						"In general, the plugin efficiently blocks an infinite export loop by using built-in filters \
-						and including two file extensions in the exported file name. When you want to break these default rules, \
-						an infinite export loop can occur with exported files having the same file extension, \
-						for example, 'MyImage.png.export.png.' \
-						In this circumstance, the auto-export process will continue until the file name exceeds its limit. \
-						If you find yourself in this situation, please refer to the following details."
-					);
+					tipSet.setDesc(t("AUTO_EXPORT_TIP_DESC"));
 				} else {
 					detailSetsToggleBtn?.setIcon("chevron-right");
 					tipSet.setDesc("");
 				}
 			};
 			tipSet = new Setting(this.contentEl)
-				.setName(
-					"Tip: Recommended settings to avoid infinity export loop."
-				)
+				.setName(t("AUTO_EXPORT_TIP"))
 				.setHeading()
 				.addExtraButton((comp) => {
 					detailSetsToggleBtn = comp;
@@ -105,21 +97,17 @@ export class ImgkPluginExportDialog extends Modal {
 
 			const detailSet1 = new Setting(this.contentEl);
 			detailSet1
-				.setDesc(
-					"1. Set a specific source folder rather than root folder of vault."
-				)
+				.setDesc(t("AUTO_EXPORT_TIP_1"))
 				.settingEl.addClass(ClsGroupMember);
 
 			const detailSet2 = new Setting(this.contentEl);
 			detailSet2
-				.setDesc("2. Isolate source and exported folder.")
+				.setDesc(t("AUTO_EXPORT_TIP_2"))
 				.settingEl.addClass(ClsGroupMember);
 
 			const detailSet3 = new Setting(this.contentEl);
 			detailSet3
-				.setDesc(
-					"3. If you have a plan with complex settings, try to use filter."
-				)
+				.setDesc(t("AUTO_EXPORT_TIP_3"))
 				.settingEl.addClass(ClsGroupMemberLast);
 
 			detailSets.push(detailSet1, detailSet2, detailSet3);
@@ -131,7 +119,9 @@ export class ImgkPluginExportDialog extends Modal {
 				this.exportSettings
 			);
 		} else {
-			new Setting(this.contentEl).setName(`Source: ${this.srcPath}`);
+			new Setting(this.contentEl).setName(
+				t("FORMAT_SOURCE").replace("${src}", this.srcPath ?? "")
+			);
 		}
 
 		let exportPathSetReturns: {
@@ -180,7 +170,7 @@ export class ImgkPluginExportDialog extends Modal {
 			const runExportBtnSet = new Setting(this.contentEl);
 			runExportBtnSet.addButton((comp: ButtonComponent) => {
 				exportBtn = comp;
-				comp.setButtonText("Export");
+				comp.setButtonText(t("EXPORT"));
 				comp.onClick((evt) => {
 					if (!srcPath) {
 						return;
@@ -216,12 +206,19 @@ export class ImgkPluginExportDialog extends Modal {
 									path
 								);
 
-								const message = `Exporte successful: "${this.srcPath}" as "${path}"`;
+								const message = t("FORMAT_EXPORT_SUCCESS")
+									.replace("${src}", this.srcPath ?? "")
+									.replace("${dst}", path);
 								new Notice(message);
 							})
 							.catch((err) => {
 								debug(err);
-								new Notice(`Export failed: ${this.srcPath}`);
+								new Notice(
+									t("FORMAT_EXPORT_FAILED").replace(
+										"${src}",
+										this.srcPath ?? ""
+									)
+								);
 							})
 							.finally(() => {});
 					}

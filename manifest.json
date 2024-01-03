@@ -3,8 +3,9 @@
 	"name": "Image Magician",
 	"version": "0.1.0",
 	"minAppVersion": "0.15.0",
-	"description": "An obsidian.md plugin. Supports view and export of several image formats.",
+	"description": "Supports viewing and exporting various image formats using ImageMagick.",
 	"author": "luxmargos",
-	"authorUrl": "https://github.com/luxmargos/obsidian-image-magician-plugin",
+	"authorUrl": "https://github.com/luxmargos",
+	"fundingUrl": "https://www.buymeacoffee.com/luxmargos",
 	"isDesktopOnly": false
 }
