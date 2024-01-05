@@ -1,6 +1,5 @@
 import { asTFile } from "../../vault_util";
-import { ExportFormat } from "../../export_settings";
-import { TAbstractFile, TFile } from "obsidian";
+import { TFile } from "obsidian";
 import {
 	IMagickImage,
 	ImageMagick,
@@ -12,14 +11,14 @@ import {
 	exportCanvasWithBlob,
 } from "../imgEngine";
 import { MainPluginContext } from "../../context";
-import { ImgkExportSettings, ImgkSize } from "../../settings/settings";
 import {
 	ImageAdj,
 	ImageAdjFunc,
 	ImgkRuntimeExportSettings,
 } from "../../settings/settings_as_func";
-import { fileURLToPath } from "url";
+
 import { debug } from "loglevel";
+import { ImgkSize } from "src/settings/setting_types";
 
 export class PluginMagickEngine implements PluginImageEngine {
 	draw(
@@ -29,6 +28,8 @@ export class PluginMagickEngine implements PluginImageEngine {
 		imageAdjFunc?: ImageAdjFunc
 	): Promise<HTMLCanvasElement> {
 		return new Promise(async (resolve, reject) => {
+			debug("Magick: draw image : ", imgFile.path);
+
 			const cv: HTMLCanvasElement = el.createEl("canvas", {
 				cls: "imgk-plugin-export-canvas",
 			});
@@ -58,7 +59,7 @@ export class PluginMagickEngine implements PluginImageEngine {
 				return;
 			}
 
-			const imgTFile = asTFile(context, imgFile);
+			const imgTFile = asTFile(imgFile);
 			if (!imgTFile) {
 				reject(new Error("Could not read file"));
 				return;

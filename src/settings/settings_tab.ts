@@ -1,5 +1,4 @@
 import {
-	App,
 	ButtonComponent,
 	DropdownComponent,
 	ExtraButtonComponent,
@@ -11,18 +10,12 @@ import {
 	ToggleComponent,
 } from "obsidian";
 import { MainPluginContext } from "../context";
-import { exportFormatList, genExportPath } from "../export_settings";
+import { genExportPath } from "../export_pack/export_utils";
 import {
 	DEFAULT_EXPORT_SETTINGS,
 	DEFAULT_FILE_NAME_FORMAT,
-	ImgkSizeAdjustType,
-	ImgkExportSettings,
-	ImgkImageSize,
-	ImgkPluginSettings,
-	ImgkFileFilterType,
 	getDefaultSupportedFormats,
 	getWarnList,
-	ImgkTextFilter,
 	DEFAULT_FILE_NAME_PREFIX,
 	DEFAULT_FILE_NAME_SUFFIX,
 	DEFAULT_EXPORT_SUPPORTED_FORMATS,
@@ -30,8 +23,17 @@ import {
 import { cloneDeep } from "lodash-es";
 import { ImgkPluginExportDialog } from "../dialogs/export_opt_dialog";
 import { normalizeObsidianDir } from "../utils/obsidian_path";
-import { debug, getLevel, getLogger } from "loglevel";
+import { debug } from "loglevel";
 import { t } from "../i18n/t";
+import { exportFormatList } from "../export_pack/export_types";
+import {
+	ImgkExportSettings,
+	ImgkFileFilterType,
+	ImgkImageSize,
+	ImgkPluginSettings,
+	ImgkSizeAdjustType,
+	ImgkTextFilter,
+} from "./setting_types";
 
 const ClsGroupMember = "imgk-settings-group-member";
 const ClsGroupMemberLast = "imgk-settings-group-member-last";
@@ -141,10 +143,30 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 		warnSet.settingEl.classList.add(ClsGroupMemberLast);
 		refreshWarnings();
 
+		const renderOptionSet = new Setting(containerEl);
+		renderOptionSet
+			.setName(t("RENDER_MODE"))
+			.setDesc(t("RENDER_MODE_DESC"));
+
+		renderOptionSet.addDropdown((comp) => {
+			const blobUrl = "blob_url";
+			const dataUrl = "data_url";
+			comp.addOption(blobUrl, t("RENDER_OPT_BLOB_URL"));
+			comp.addOption(dataUrl, t("RENDER_OPT_DATA_URL"));
+			comp.setValue(settings.useBlob ? blobUrl : dataUrl);
+
+			comp.onChange((value) => {
+				if (value === blobUrl) {
+					settings.useBlob = true;
+				} else {
+					settings.useBlob = false;
+				}
+			});
+		});
+
 		const markdownSupportSet = new Setting(containerEl);
 		markdownSupportSet.setName(t("MD_SUPPORT"));
 		markdownSupportSet.setDesc(t("MD_SUPPORT_DESC"));
-
 		markdownSupportSet.setHeading();
 
 		new Setting(containerEl)
@@ -158,8 +180,8 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName(t("HTML_IMG_RENDER"))
-			.setDesc(t("HTML_IMG_RENDER_DESC"))
+			.setName(t("HTML_IMG_RENDER_RES_PATH"))
+			.setDesc(t("HTML_IMG_RENDER_RES_PATH_DESC"))
 			.addToggle((comp) => {
 				comp.setValue(settings.renderMarkdownImgTag);
 				comp.onChange((value) => {
@@ -176,12 +198,52 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 				});
 			});
 
-		// new Setting(containerEl).setName("Use BLOB").addToggle((comp) => {
-		// 	comp.setValue(settings.useBlob);
-		// 	comp.onChange((value) => {
-		// 		settings.useBlob = value;
-		// 	});
-		// });
+		new Setting(containerEl).setName(t("MD_SUPPORT_ALL")).setHeading();
+
+		let vaultPathSyntaxParsePlainTextSet: Setting;
+		let vaultPathSyntaxParseLinkSet: Setting;
+		const resfreshVaultPathSyntaxOptions = () => {
+			vaultPathSyntaxParsePlainTextSet?.settingEl.toggle(
+				settings.vaultBasedPathSupporter.enabled
+			);
+			vaultPathSyntaxParseLinkSet?.settingEl.toggle(
+				settings.vaultBasedPathSupporter.enabled
+			);
+		};
+
+		new Setting(containerEl)
+			.setName(t("SUPPORT_VAULT_PATH_IN_ELEMENT"))
+			.setDesc(t("SUPPORT_VAULT_PATH_IN_ELEMENT_DEC"))
+			.addToggle((comp) => {
+				comp.setValue(settings.vaultBasedPathSupporter.enabled);
+				comp.onChange((value) => {
+					settings.vaultBasedPathSupporter.enabled = value;
+					resfreshVaultPathSyntaxOptions();
+				});
+				resfreshVaultPathSyntaxOptions();
+			});
+
+		vaultPathSyntaxParsePlainTextSet = new Setting(containerEl);
+		vaultPathSyntaxParsePlainTextSet
+			.setName(t("PLAIN_PATH"))
+			.setDesc(t("PLAIN_PATH_DESC"))
+			.addToggle((comp) => {
+				comp.setValue(settings.vaultBasedPathSupporter.plainText);
+				comp.onChange((value) => {
+					settings.vaultBasedPathSupporter.plainText = value;
+				});
+			});
+		vaultPathSyntaxParseLinkSet = new Setting(containerEl)
+			.setName(t("LINK_SYNTAX"))
+			.setDesc(t("LINK_SYNTAX_DESC"))
+			.addToggle((comp) => {
+				comp.setValue(settings.vaultBasedPathSupporter.inlineLink);
+				comp.onChange((value) => {
+					settings.vaultBasedPathSupporter.inlineLink = value;
+				});
+			});
+
+		resfreshVaultPathSyntaxOptions();
 
 		// AUTO EXPORT
 		const headingSet = new Setting(containerEl);

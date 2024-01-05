@@ -1,28 +1,20 @@
-import {
-	ButtonComponent,
-	EditableFileView,
-	FileView,
-	Modal,
-	Setting,
-	TFile,
-	WorkspaceLeaf,
-} from "obsidian";
+import { EditableFileView, TFile, WorkspaceLeaf } from "obsidian";
 import { MainPluginContext } from "./context";
 import { PIE } from "./engines/imgEngines";
-import { PluginFullName } from "./consts/main";
 import { createErrorEl } from "./errors";
-import { ImgkPluginSettingTab } from "./settings/settings_tab";
-import { exportFormatMap } from "./export_settings";
 import { ImgkPluginExportDialog } from "./dialogs/export_opt_dialog";
-import { getCache, setCache } from "./img_cache";
+import { getCache } from "./img_cache";
 import {
 	attachImgFollower,
 	setImgTagImageWithCache,
 } from "./editor_ext/img_post_processor";
+import { debug, error } from "loglevel";
 
 export const VIEW_TYPE_IMGK_PLUGIN = "imgk-plugin-view";
 export class ImgkPluginFileView extends EditableFileView {
 	context: MainPluginContext;
+	/** Support pandoc plugin on parse inline link? */
+	data: any;
 
 	constructor(context: MainPluginContext, leaf: WorkspaceLeaf) {
 		super(leaf);
@@ -65,6 +57,7 @@ export class ImgkPluginFileView extends EditableFileView {
 
 	protected onOpen(): Promise<void> {
 		return new Promise((resolve, _reject) => {
+			this.data = {};
 			this.contentEl.empty();
 			resolve();
 		});
@@ -87,8 +80,11 @@ export class ImgkPluginFileView extends EditableFileView {
 
 	onLoadFile(file: TFile): Promise<void> {
 		return new Promise(async (resolve, reject) => {
+			this.data = {};
 			this.contentEl.empty();
 			const imgElement = await this.loadImage(file);
+			// this.data = imgElement?.src;
+
 			resolve();
 
 			if (
@@ -165,6 +161,7 @@ export class ImgkPluginFileView extends EditableFileView {
 				finishJob();
 			} catch (err) {
 				canvas?.remove();
+				error(err);
 				createErrorEl(this.contentEl, file.path, err);
 				resolve(undefined);
 			}

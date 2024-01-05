@@ -1,9 +1,9 @@
 {
 	"id": "image-magician",
 	"name": "Image Magician",
-	"version": "0.1.1",
+	"version": "0.1.2",
 	"minAppVersion": "0.15.0",
-	"description": "Supports viewing and exporting various image formats using ImageMagick.",
+	"description": "Supports viewing and exporting various image formats powerd by ImageMagick.",
 	"author": "luxmargos",
 	"authorUrl": "https://github.com/luxmargos",
 	"fundingUrl": "https://www.buymeacoffee.com/luxmargos",

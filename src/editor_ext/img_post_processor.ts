@@ -1,21 +1,6 @@
-import {
-	App,
-	Editor,
-	FileSystemAdapter,
-	TAbstractFile,
-	TFile,
-	editorEditorField,
-	editorInfoField,
-	editorLivePreviewField,
-} from "obsidian";
+import { TFile, normalizePath } from "obsidian";
 
-import {
-	EditorView,
-	ViewPlugin,
-	ViewUpdate,
-	Decoration,
-	DecorationSet,
-} from "@codemirror/view";
+import { EditorView } from "@codemirror/view";
 
 import { findValutFile, isTFile } from "../vault_util";
 import { MainPluginContext } from "../context";
@@ -26,6 +11,7 @@ import { lowerCasedExtNameWithoutDot } from "../utils/obsidian_path";
 import { debug } from "loglevel";
 import { isEqual, uniqueId } from "lodash-es";
 import { getCache, setCache } from "../img_cache";
+import { ImgkPluginVaultBasedPathOptions } from "../settings/setting_types";
 
 export function normalImgHandler(
 	context: MainPluginContext,
@@ -33,32 +19,79 @@ export function normalImgHandler(
 	observer?: ImgkMutationObserver,
 	cmView?: EditorView
 ) {
-	if (!context.plugin.settingsUtil.getSettingsRef().renderMarkdownImgTag) {
+	const settingsUtil = context.plugin.settingsUtil;
+	const settings = settingsUtil.getSettingsRef();
+	if (
+		!settings.renderMarkdownImgTag &&
+		!settings.vaultBasedPathSupporter.enabled
+	) {
 		return;
 	}
 
-	const adapter = context.plugin.app.vault.adapter;
-	const fsa: FileSystemAdapter | undefined =
-		adapter instanceof FileSystemAdapter ? adapter : undefined;
-
-	if (!fsa) {
-		return;
-	}
-
-	const supportedFormats =
-		context.plugin.settingsUtil.getRuntimeSupportedFormats();
+	const supportedFormats = settingsUtil.getRuntimeSupportedFormats();
 	const imgEls = contentDOM.querySelectorAll("img");
-	const basePath = fsa.getBasePath();
 
 	for (let i = 0; i < imgEls.length; i++) {
 		const imgEl = imgEls[i];
-		handleImg(context, basePath, supportedFormats, imgEl, observer, cmView);
+
+		if (settings.vaultBasedPathSupporter.enabled) {
+			processVaultBasedPath(
+				context,
+				imgEl,
+				settings.vaultBasedPathSupporter
+			);
+		}
+
+		if (settings.renderMarkdownImgTag) {
+			handleImg(context, supportedFormats, imgEl, observer, cmView);
+		}
 	}
 }
 
+const regexExpInlineLink = /\!?\[\[(.*)\]\]/;
+
+export const processVaultBasedPath = (
+	context: MainPluginContext,
+	imgEl: HTMLImageElement,
+	options: ImgkPluginVaultBasedPathOptions
+) => {
+	const src = imgEl.getAttribute("src");
+	if (!src) {
+		return;
+	}
+
+	let srcUrl: URL | undefined;
+	try {
+		srcUrl = new URL(src);
+	} catch (err) {}
+
+	//skip protocol string
+	if (srcUrl) {
+		return;
+	}
+
+	let srcPath: string = "";
+	if (options.inlineLink) {
+		const inlineLinkMatch = src.match(regexExpInlineLink);
+		if (inlineLinkMatch && inlineLinkMatch.length > 1) {
+			srcPath = inlineLinkMatch[1];
+		}
+	}
+
+	if (!srcPath && options.plainText) {
+		srcPath = src;
+	}
+
+	if (srcPath) {
+		const srcFile = findValutFile(context, srcPath, false);
+		if (srcFile) {
+			imgEl.src = context.plugin.app.vault.getResourcePath(srcFile);
+		}
+	}
+};
+
 export const handleImg = (
 	context: MainPluginContext,
-	basePath: string,
 	supportedFormats: Set<string>,
 	imgEl: HTMLElement,
 	observer?: ImgkMutationObserver,
@@ -76,10 +109,26 @@ export const handleImg = (
 		return;
 	}
 
-	let srcFile: TFile | undefined | null;
+	let srcUrl: URL | undefined;
+	try {
+		srcUrl = new URL(src);
+	} catch (err) {}
 
-	const srcUrl = new URL(src);
+	if (!srcUrl) {
+		return;
+	}
+
+	if (context.plugin.baseResourcePathIdx < 0) {
+		return;
+	}
+
+	let srcFile: TFile | undefined | null;
 	let fullResPath = decodeURIComponent(srcUrl.pathname);
+
+	if (fullResPath.length < context.plugin.baseResourcePathIdx) {
+		return;
+	}
+
 	const ext = lowerCasedExtNameWithoutDot(fullResPath);
 	if (ext.length < 1) {
 		return;
@@ -90,19 +139,11 @@ export const handleImg = (
 		return;
 	}
 
-	const basePathIdx = fullResPath.indexOf(basePath);
-	if (basePathIdx >= 0) {
-		let valutRelativePath = fullResPath.substring(
-			basePathIdx + basePath.length
-		);
+	let valutRelativePath = normalizePath(
+		fullResPath.substring(context.plugin.baseResourcePathIdx)
+	);
 
-		//remove slash start
-		if (valutRelativePath.startsWith("/")) {
-			valutRelativePath = valutRelativePath.substring(1);
-		}
-
-		srcFile = findValutFile(context, valutRelativePath, true);
-	}
+	srcFile = findValutFile(context, valutRelativePath, true);
 
 	if (!srcFile) {
 		return;
@@ -232,22 +273,6 @@ export function linkedImgHandler(
 			// titleNode.style.pointerEvents = "none";
 		}
 
-		// disable navigate to file on click
-		if (context.plugin.settingsUtil.getSettingsRef().overrideDragAndDrop) {
-			internalEmbed.onClickEvent(
-				(e) => {
-					// e.stopImmediatePropagation();
-					e.stopPropagation();
-					e.preventDefault();
-					return false;
-				},
-				{
-					capture: true,
-					passive: false,
-				}
-			);
-		}
-
 		internalEmbed.classList.remove("file-embed");
 		internalEmbed.classList.add("image-embed");
 		internalEmbed.classList.add("media-embed");
@@ -260,7 +285,7 @@ export function linkedImgHandler(
 		}
 
 		if (context.plugin.settingsUtil.getSettingsRef().overrideDragAndDrop) {
-			attachImgFollower(context, img, srcFile, observer);
+			attachImgFollower(context, img, srcFile, observer, internalEmbed);
 		}
 	}
 }
@@ -374,7 +399,8 @@ export function attachImgFollower(
 	context: MainPluginContext,
 	img: HTMLImageElement,
 	file: TFile,
-	observer?: ImgkMutationObserver
+	observer?: ImgkMutationObserver,
+	additionalClickerHTML?: HTMLElement
 ) {
 	const imgParent = img.parentElement;
 	if (!imgParent) {
@@ -411,6 +437,23 @@ export function attachImgFollower(
 		attr: { "data-imgk-overlay": imgOverlayId },
 	});
 
+	if (additionalClickerHTML) {
+		additionalClickerHTML.onClickEvent(
+			(e) => {
+				// imgOverlayEl!.click();
+				// img.click();
+				// e.stopImmediatePropagation();
+				e.stopPropagation();
+				// e.preventDefault();
+
+				return false;
+			},
+			{
+				capture: true,
+				passive: false,
+			}
+		);
+	}
 	imgOverlayEl.draggable = true;
 	const resPath = context.plugin.app.vault.getResourcePath(file);
 	imgOverlayEl.setAttribute("src", resPath);
@@ -426,6 +469,12 @@ export function attachImgFollower(
 		e.dataTransfer?.setData("text/uri-list", file.path);
 		// e.dataTransfer?.setData("file", file.path);
 		// e.dataTransfer?.setData("files", file.path);
+	});
+
+	//pasthrough click event to img tag to Trigger Image Toolkit. For now, this works
+	//about to <img> tag. Not works for inline link.
+	imgOverlayEl.addEventListener("click", (evt) => {
+		img.click();
 	});
 
 	const realBoundFoundingDot = imgParent.createDiv({

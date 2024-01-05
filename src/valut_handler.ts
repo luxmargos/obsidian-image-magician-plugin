@@ -1,12 +1,12 @@
-import { TAbstractFile, TFile } from "obsidian";
+import { TAbstractFile, TFile, hexToArrayBuffer } from "obsidian";
 import { MainPluginContext } from "./context";
-import { genExportPath } from "./export_settings";
-import { findValutFile } from "./vault_util";
+import { exportImage, genExportPath } from "./export_pack/export_utils";
+import { asTFile, findValutFile } from "./vault_util";
 import * as pb from "path-browserify";
-import { ImgkPluginSettings, SettingsUtil } from "./settings/settings";
+import { SettingsUtil } from "./settings/settings";
 import { ImgkRuntimeExportSettings } from "./settings/settings_as_func";
 import { debug } from "loglevel";
-import { exportImage } from "./exporter";
+import { ImgkPluginSettings } from "./settings/setting_types";
 
 export class VaultHandler {
 	context: MainPluginContext;
@@ -69,7 +69,7 @@ export class VaultHandler {
 				this.getSettingsUtil().findRuntimeAutoExports(file);
 
 			for (const settings of autoExports) {
-				this.runExport(file as TFile, settings, forcedExport);
+				this.runExport(file, settings, forcedExport);
 			}
 		}
 	}
@@ -119,9 +119,14 @@ export class VaultHandler {
 			return;
 		}
 
+		const tFile = asTFile(file);
+		if (!tFile) {
+			return;
+		}
+
 		const autoExports = this.getSettingsUtil().findRuntimeAutoExports(file);
 		for (const settings of autoExports) {
-			this.runExport(file as TFile, settings, false);
+			this.runExport(tFile, settings, false);
 		}
 	}
 
@@ -130,9 +135,14 @@ export class VaultHandler {
 			return;
 		}
 
+		const tFile = asTFile(file);
+		if (!tFile) {
+			return;
+		}
+
 		const autoExports = this.getSettingsUtil().findRuntimeAutoExports(file);
 		for (const settings of autoExports) {
-			this.runExport(file as TFile, settings, false);
+			this.runExport(tFile, settings, false);
 		}
 	}
 
@@ -146,8 +156,12 @@ export class VaultHandler {
 		}
 
 		debug("on rename : ", oldPath, "->", file.path);
+		const tFile = asTFile(file);
+		if (!tFile) {
+			return;
+		}
 
-		this.groupRename(file as TFile, oldPath)
+		this.groupRename(tFile, oldPath)
 			.then(() => {})
 			.catch((err) => {});
 	}
@@ -246,6 +260,10 @@ export class VaultHandler {
 		}
 		debug("on delete : ", file.path);
 
-		this.deleteGroupFiles(file as TFile);
+		const tFile = asTFile(file);
+		if (!tFile) {
+			return;
+		}
+		this.deleteGroupFiles(tFile);
 	}
 }

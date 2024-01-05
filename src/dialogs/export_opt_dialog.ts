@@ -8,12 +8,15 @@ import {
 } from "obsidian";
 import { MainPluginContext } from "../context";
 import { ImgkPluginSettingTab } from "../settings/settings_tab";
-import { ImgkExportSettings, ImgkPluginSettings } from "../settings/settings";
 import { debug } from "loglevel";
 import { findValutFile } from "../vault_util";
-import { exportImage } from "../exporter";
 import { convertExportSettingsToRuntime } from "../settings/settings_as_func";
 import { t } from "../i18n/t";
+import {
+	ImgkExportSettings,
+	ImgkPluginSettings,
+} from "../settings/setting_types";
+import { exportImage } from "../export_pack/export_utils";
 
 const ClsGroupMember = "imgk-settings-group-member";
 const ClsGroupMemberLast = "imgk-settings-group-member-last";
@@ -28,6 +31,7 @@ export class ImgkPluginExportDialog extends Modal {
 
 	private source?: TFile | string;
 	private srcPath?: string;
+	private isInstantMode: boolean;
 
 	constructor(
 		context: MainPluginContext,
@@ -52,6 +56,9 @@ export class ImgkPluginExportDialog extends Modal {
 			}
 		}
 
+		this.isInstantMode =
+			this.srcPath && this.srcPath.length > 0 ? true : false;
+
 		if (!this.srcPath) {
 			this.titleEl.setText(t("EXPORT_SETTINGS"));
 		} else {
@@ -62,9 +69,7 @@ export class ImgkPluginExportDialog extends Modal {
 	onOpen(): void {
 		const srcPath = this.srcPath;
 
-		const isInstantMode = srcPath && srcPath.length > 0;
-
-		if (!isInstantMode) {
+		if (!this.isInstantMode) {
 			let detailSets: Setting[] = [];
 			let detailSetsToggleBtn: ExtraButtonComponent;
 			let expandDetailSets = false;
@@ -166,7 +171,7 @@ export class ImgkPluginExportDialog extends Modal {
 			srcPath
 		);
 
-		if (isInstantMode) {
+		if (this.isInstantMode) {
 			const runExportBtnSet = new Setting(this.contentEl);
 			runExportBtnSet.addButton((comp: ButtonComponent) => {
 				exportBtn = comp;

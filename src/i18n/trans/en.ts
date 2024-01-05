@@ -5,17 +5,30 @@ export default {
 	FORMATS_PLACEHOLDER: "e.g., psd, tiff, xcf",
 	FORMATS_WARN:
 		"Warning: attempting to add already supported extensions in obsidian",
-	MD_SUPPORT: "Markdown support",
+	MD_SUPPORT: "Markdown support (for plugin-supported image formats only).",
 	MD_SUPPORT_DESC:
 		"Here are some options to make the supported image formats in the plugin behave like default Obsidian image formats in markdown.",
+
+	MD_SUPPORT_ALL: "Markdown support for all images",
 
 	INLINE_LINK_RENDER: "Inline link rendering",
 	INLINE_LINK_RENDER_DESC:
 		"The markdown inline link, such as ![[...]], will be rendered.",
 
-	HTML_IMG_RENDER: "HTML <img> tag rendering",
-	HTML_IMG_RENDER_DESC:
+	HTML_IMG_RENDER_RES_PATH: "HTML <img> tag rendering",
+	HTML_IMG_RENDER_RES_PATH_DESC:
 		'The <img> tag will be rendered with the file\'s resource path in the "src" attribute, such as src="app://..../img.psd"',
+
+	SUPPORT_VAULT_PATH_IN_ELEMENT:
+		"Supports using vault path syntax in `<img>` element.",
+	SUPPORT_VAULT_PATH_IN_ELEMENT_DEC: `With this option, you can insert vault file paths in the 'src' attribute, such as <img src="My_Image.png">, <img src="[[My_Image.png]]">.`,
+
+	PLAIN_PATH: "Plain path",
+	PLAIN_PATH_DESC: 'Detects plain text, such as `src="Folder/Image.png"`',
+
+	LINK_SYNTAX: "Link syntax",
+	LINK_SYNTAX_DESC:
+		'Detects markdown link syntax, such as `src="[[Image.png]]"`',
 
 	OVERRIDE_DND: "Override drag and drop (experimental)",
 	EXPORT: "Export",
@@ -129,8 +142,6 @@ If you find yourself in this situation, please refer to the following details.",
 	PROCESS_AUTO_EXPORT_SETTINGS_FORCED:
 		"Process all auto-export settings (forced)",
 
-	WARN_PLUGIN_START_UP: "Warning on plugin startup",
-
 	MISCELLANEOUS: "Miscellaneous",
 	EXCALIDRAW_STRETCHED_EMBEDDING:
 		"Excalidraw: stretched image embedding mode",
@@ -140,4 +151,15 @@ If you find yourself in this situation, please refer to the following details.",
 	FORMAT_SOURCE: "Source: ${src}",
 	FORMAT_FAILED_EXT_LIST:
 		'Some file extensions, such as "[${list}]" have failed to register in the obsidian app. The plugin will not support viewing them. Consider changing the ${name} plugin settings.',
+
+	RENDER_OPT_BLOB_URL: "Blob (Better performance)",
+	RENDER_OPT_DATA_URL: "Data URL (Markdown export friendly)",
+	RENDER_MODE: "Render mode",
+	RENDER_MODE_DESC:
+		"Choose a rendering solution; if you encounter issues with export/publish, try the 'Data URL' option. You need to reload the document to apply changes.",
+
+	WARN_PLUGIN_START_UP: "Warning on plugin startup",
+	ERROR_PLUGIN_START_UP: "Error occurred on plugin startup",
+	ERROR_IMAGE_MAGICK_LOAD_FAILED:
+		"Initialization failed with ImageMagick. The browser appears lack of compatibility. Please try reinstalling this plugin or restarting the application.",
 };

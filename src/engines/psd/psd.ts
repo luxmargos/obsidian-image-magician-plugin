@@ -1,5 +1,5 @@
 import Psd from "@webtoon/psd";
-import { asTFile, asTFileOrThrow, findValutFile } from "../../vault_util";
+import { asTFile } from "../../vault_util";
 import { TFile } from "obsidian";
 import {
 	ExportDstInfo,
@@ -7,13 +7,13 @@ import {
 	exportCanvasWithBlob,
 } from "../imgEngine";
 import { MainPluginContext } from "../../context";
-import { ImgkExportSettings, ImgkSize } from "../../settings/settings";
 import {
 	ImageAdj,
 	ImageAdjFunc,
 	ImgkRuntimeExportSettings,
 } from "../../settings/settings_as_func";
 import { debug } from "loglevel";
+import { ImgkSize } from "src/settings/setting_types";
 
 function resizeAndFlipImageData(
 	refEl: HTMLElement | undefined | null,
@@ -35,7 +35,7 @@ function resizeAndFlipImageData(
 		});
 	}
 
-	var ctx: CanvasRenderingContext2D | null = canvas.getContext("2d");
+	const ctx: CanvasRenderingContext2D | null = canvas.getContext("2d");
 	if (!ctx) {
 		canvas.remove();
 		return;
@@ -70,6 +70,8 @@ export class PluginPsdEngine implements PluginImageEngine {
 		imageAdjFunc?: ImageAdjFunc
 	): Promise<HTMLCanvasElement> {
 		return new Promise(async (resolve, reject) => {
+			debug("PSD: draw image : ", imgFile.path);
+
 			const cv: HTMLCanvasElement = refEl.createEl("canvas", {
 				cls: "imgk-plugin-export-canvas",
 			});
@@ -99,7 +101,7 @@ export class PluginPsdEngine implements PluginImageEngine {
 				return;
 			}
 
-			const psdTFile = asTFile(context, imgFile);
+			const psdTFile = asTFile(imgFile);
 			if (!psdTFile) {
 				reject(new Error("Could not read file"));
 				return;

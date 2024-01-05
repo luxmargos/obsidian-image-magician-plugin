@@ -1,79 +1,29 @@
 import { cloneDeep, size } from "lodash-es";
-import { ExportFormat } from "../export_settings";
+import { buildFileNameFormat } from "../export_pack/export_utils";
 import { satisfies } from "compare-versions";
 import { TAbstractFile, TFile, apiVersion } from "obsidian";
-import { WARN_LIST_1_5_3, WARN_LIST_OLD } from "./obsidian_formats";
+import {
+	OBSIDIAN_NATIVE_IMAGE_FORMATS_1_5_3,
+	OBSIDIAN_NATIVE_IMAGE_FORMATS_OLD,
+	WARN_LIST_1_5_3,
+	WARN_LIST_OLD,
+} from "./obsidian_formats";
 import {
 	ImgkRuntimeExportSettings,
 	convertAllExportSettingsToRuntime,
 } from "./settings_as_func";
-import { isTFile } from "../vault_util";
-
-export enum ImgkSizeAdjustType {
-	Fixed = 0,
-	Scale = 1,
-	Minimum = 2,
-	Maximum = 3,
-}
-
-export enum ImgkFileFilterType {
-	Includes = 0,
-	Excludes = 1,
-	RegexMatch = 2,
-	RegexNonMatch = 3,
-	DoubleExtsBlocker = 4,
-}
-
-export interface ImgkFileFilter {
-	active: boolean;
-	type: ImgkFileFilterType;
-}
-
-export interface ImgkTextFilter extends ImgkFileFilter {
-	content: string;
-	flags: string;
-	isReversed: boolean;
-}
-
-export type ImgkSize = { x: number; y: number };
-
-export interface ImgkExportPath {
-	sourceDir: string;
-	recursiveSources: boolean;
-	sourceExts: string[];
-	sourceFilters: ImgkTextFilter[];
-	useBuiltInSourceFilters: boolean;
-	builtInSourceFilters: ImgkFileFilter[];
-	asRelativePath: boolean;
-	exportDirAbs: string;
-	exportDirRel: string;
-	useCustomFileNameFormat: boolean;
-	fileNameFormatPrefix: string;
-	fileNameFormatSuffix: string;
-	customFileNameFormat: string;
-}
-
-export interface ImgkImageSize {
-	x?: number;
-	y?: number;
-	type: ImgkSizeAdjustType;
-}
-
-export interface ImgkExportImageProps {
-	quality: number;
-	sizeAdjustments: ImgkImageSize[];
-}
-
-export interface ImgkExportSettings {
-	active: boolean;
-	name: string;
-	format: ExportFormat;
-	imgProps: ImgkExportImageProps;
-	pathOpts: ImgkExportPath;
-}
+import { asTFile, isTFile } from "../vault_util";
+import packageJson from "../../package.json";
+import {
+	ImgkExportSettings,
+	ImgkFileFilterType,
+	ImgkPluginSettings,
+} from "./setting_types";
+import { ExportFormatPng } from "../export_pack/export_types";
 
 export const DEFAULT_EXPORT_SUPPORTED_FORMATS = [
 	"psd",
+	"psb",
 	"xcf",
 	"tif",
 	"tiff",
@@ -103,6 +53,7 @@ export const DEFAULT_EXPORT_SUPPORTED_FORMATS = [
 export const getDefaultSupportedFormats = () => {
 	return [
 		"psd",
+		"psb",
 		"xcf",
 		"tif",
 		"tiff",
@@ -134,15 +85,6 @@ export const getDefaultSupportedFormats = () => {
 export const DEFAULT_FILE_NAME_PREFIX = "";
 export const DEFAULT_FILE_NAME_SUFFIX = "export";
 
-export const buildFileNameFormat = (prefix: string, suffix: string) => {
-	return (
-		(prefix ? `${prefix}.` : "") +
-		"${name}.${ext}" +
-		(suffix ? `.${suffix}` : "") +
-		".${dst_ext}"
-	);
-};
-
 export const DEFAULT_FILE_NAME_FORMAT = buildFileNameFormat(
 	DEFAULT_FILE_NAME_PREFIX,
 	DEFAULT_FILE_NAME_SUFFIX
@@ -151,11 +93,7 @@ export const DEFAULT_FILE_NAME_FORMAT = buildFileNameFormat(
 export const DEFAULT_EXPORT_SETTINGS: ImgkExportSettings = {
 	name: "",
 	active: false,
-	format: {
-		ext: "png",
-		mimeType: "image/png",
-		display: "png",
-	},
+	format: cloneDeep(ExportFormatPng),
 	imgProps: {
 		quality: 1,
 		sizeAdjustments: [],
@@ -179,31 +117,14 @@ export const DEFAULT_EXPORT_SETTINGS: ImgkExportSettings = {
 	},
 };
 
-// Remember to rename these classes and interfaces!
-export interface ImgkPluginSettings {
-	supportedFormats: string[];
-	exportMenuSupportedFormats: string[];
+const cloneDefaultExportSettings = () => {
+	const defaultSettings = cloneDeep(DEFAULT_EXPORT_SETTINGS);
+	defaultSettings.pathOpts.asRelativePath = true;
+	return defaultSettings;
+};
 
-	autoExportList: ImgkExportSettings[];
-	instantExport: ImgkExportSettings;
-
-	renderMarkdownInlineLink: boolean;
-	renderMarkdownImgTag: boolean;
-	overrideDragAndDrop: boolean;
-	useBlob: boolean;
-
-	excalidrawStretchEmbed: boolean;
-
-	trackRename: boolean;
-	trackDelete: boolean;
-
-	/**
-	 * Base features
-	 */
-	previewLink: boolean;
-	/** support obsidian's markdown based imgage size format. e.g., [[IMAGE | IMAGE_SIZE]]*/
-	supportMdImageSizeFormat: boolean;
-}
+export const DEFAULT_INSTANT_EXPORT_SETTINGS: ImgkExportSettings =
+	cloneDefaultExportSettings();
 
 export const getWarnList = () => {
 	if (satisfies(apiVersion, ">=1.5.3")) {
@@ -213,12 +134,21 @@ export const getWarnList = () => {
 	return WARN_LIST_OLD;
 };
 
+export const getObsidianNativeImageList = () => {
+	if (satisfies(apiVersion, ">=1.5.3")) {
+		return OBSIDIAN_NATIVE_IMAGE_FORMATS_1_5_3;
+	}
+
+	return OBSIDIAN_NATIVE_IMAGE_FORMATS_OLD;
+};
+
 export const DEFAULT_SETTINGS: ImgkPluginSettings = {
+	version: packageJson.version,
 	supportedFormats: getDefaultSupportedFormats(),
 
 	exportMenuSupportedFormats: cloneDeep(DEFAULT_EXPORT_SUPPORTED_FORMATS),
 	autoExportList: [],
-	instantExport: cloneDeep(DEFAULT_EXPORT_SETTINGS),
+	instantExport: cloneDeep(DEFAULT_INSTANT_EXPORT_SETTINGS),
 
 	renderMarkdownInlineLink: true,
 	renderMarkdownImgTag: true,
@@ -232,11 +162,18 @@ export const DEFAULT_SETTINGS: ImgkPluginSettings = {
 
 	trackRename: true,
 	trackDelete: true,
+
+	vaultBasedPathSupporter: {
+		enabled: true,
+		plainText: true,
+		inlineLink: true,
+		filters: [{ el: "img", attr: "src" }],
+	},
 };
 
 export class SettingsUtil {
 	private settings: ImgkPluginSettings;
-	private runtimeSupportedSettings: Set<string> = new Set();
+	private runtimeSupportedFormats: Set<string> = new Set();
 	private runtimeAutoExports: ImgkRuntimeExportSettings[] = [];
 	private runtimeExportSupportedFormats: Set<string> = new Set();
 
@@ -251,11 +188,11 @@ export class SettingsUtil {
 	};
 
 	setRuntimeSupportedFormats(formats: Set<string>) {
-		this.runtimeSupportedSettings = new Set(formats);
+		this.runtimeSupportedFormats = new Set(formats);
 	}
 
 	getRuntimeSupportedFormats = () => {
-		return this.runtimeSupportedSettings;
+		return this.runtimeSupportedFormats;
 	};
 
 	getSupportedFormats = () => {
@@ -272,7 +209,7 @@ export class SettingsUtil {
 	getClone = () => {
 		const cloned = new SettingsUtil(this.getSettingsClone());
 		cloned.setRuntimeSupportedFormats(
-			new Set(this.runtimeSupportedSettings)
+			new Set(this.runtimeSupportedFormats)
 		);
 
 		return cloned;
@@ -302,11 +239,10 @@ export class SettingsUtil {
 	};
 
 	findRuntimeAutoExports = (file: TAbstractFile) => {
-		if (!isTFile(file)) {
+		const tflie = asTFile(file);
+		if (!tflie) {
 			return [];
 		}
-
-		const tflie = file as TFile;
 
 		const result: ImgkRuntimeExportSettings[] = [];
 		for (const runtimeExport of this.runtimeAutoExports) {

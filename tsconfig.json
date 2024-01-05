@@ -11,7 +11,9 @@
 		"importHelpers": true,
 		"isolatedModules": true,
 		"strictNullChecks": true,
-		"lib": ["DOM", "ES5", "ES6", "ES7", "ESNext.BigInt"]
+		"lib": ["DOM", "ES5", "ES6", "ES7", "ESNext.BigInt"],
+		"resolveJsonModule": true,
+		"allowSyntheticDefaultImports": true
 	},
 	"include": ["**/*.ts"]
 }

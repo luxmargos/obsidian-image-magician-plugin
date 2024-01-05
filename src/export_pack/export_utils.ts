@@ -1,38 +1,11 @@
 import { TFile, normalizePath } from "obsidian";
-import { ImgkExportSettings, buildFileNameFormat } from "./settings/settings";
 import * as bp from "path-browserify";
-
-export type ExportFormat = {
-	display?: string;
-	mimeType: string;
-	ext: string;
-};
-
-export const exportFormatMap: Record<string, ExportFormat> = {
-	png: {
-		display: "PNG",
-		mimeType: "image/png",
-		ext: "png",
-	},
-
-	jpg: {
-		display: "JPEG",
-		mimeType: "image/jpeg",
-		ext: "jpg",
-	},
-
-	webp: {
-		display: "WEBP",
-		mimeType: "image/webp",
-		ext: "webp",
-	},
-};
-
-export const exportFormatList: ExportFormat[] = [
-	exportFormatMap.png,
-	exportFormatMap.jpg,
-	exportFormatMap.webp,
-];
+import { ExportFormat, ExportPathData, exportFormatList } from "./export_types";
+import { ImgkExportSettings } from "../settings/setting_types";
+import { ImgkRuntimeExportSettings } from "../settings/settings_as_func";
+import { resolveExportDstInfo } from "../engines/imgEngine";
+import { MainPluginContext } from "../context";
+import { PIE } from "../engines/imgEngines";
 
 export const isImageExportFormat = (
 	exportFileFormat: ExportFormat
@@ -46,16 +19,13 @@ export const isImageExportFormat = (
 	);
 };
 
-export type ExportPathData = {
-	src: {
-		name: string;
-		nameWithoutExt: string;
-		ext: string;
-	};
-	dst: {
-		path: string;
-		name: string;
-	};
+export const buildFileNameFormat = (prefix: string, suffix: string) => {
+	return (
+		(prefix ? `${prefix}.` : "") +
+		"${name}.${ext}" +
+		(suffix ? `.${suffix}` : "") +
+		".${dst_ext}"
+	);
 };
 
 export const genExportPath = (
@@ -154,4 +124,36 @@ export const genExportPath = (
 			},
 		};
 	}
+};
+
+export const exportImage = (
+	context: MainPluginContext,
+	refEl: HTMLElement,
+	srcFile: TFile,
+	specificDst: string | undefined,
+	settings: ImgkRuntimeExportSettings,
+	forcedExport: boolean
+): Promise<string> => {
+	return new Promise(async (resolve, reject) => {
+		const exportData = resolveExportDstInfo(
+			context,
+			srcFile,
+			settings.data,
+			specificDst
+		);
+
+		if (!exportData) {
+			reject(new Error("There are no export data"));
+			return;
+		}
+
+		PIE.getEngine(srcFile.extension)
+			.export(context, srcFile, settings, refEl, forcedExport, exportData)
+			.then((path) => {
+				resolve(path);
+			})
+			.catch((err) => {
+				reject(err);
+			});
+	});
 };

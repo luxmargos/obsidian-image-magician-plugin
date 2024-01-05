@@ -1,12 +1,20 @@
-import { Modal, Plugin, TFile, ViewCreator, WorkspaceLeaf } from "obsidian";
+import {
+	FileSystemAdapter,
+	Modal,
+	Platform,
+	TAbstractFile,
+	TFile,
+	ViewCreator,
+	WorkspaceLeaf,
+} from "obsidian";
 import * as psd from "./engines/psd/psd";
 import * as magick from "./engines/magick/magick";
 import { livePreviewExtension } from "./editor_ext/live_preview";
 import { loadImageMagick } from "./engines/magick/magick_loader";
 import { PIE } from "./engines/imgEngines";
 import {
+	DEFAULT_INSTANT_EXPORT_SETTINGS,
 	DEFAULT_SETTINGS,
-	ImgkPluginSettings,
 	SettingsUtil,
 } from "./settings/settings";
 import { MainPlugin, MainPluginContext } from "./context";
@@ -16,26 +24,33 @@ import { ImgkPluginFileView, VIEW_TYPE_IMGK_PLUGIN } from "./view";
 import { getMarkdownPostProcessor } from "./editor_ext/post_processor";
 import { Magick } from "@imagemagick/magick-wasm";
 
-import { PluginName } from "./consts/main";
-import { debug, info, log, setDefaultLevel, setLevel } from "loglevel";
+import { PluginFullName, PluginName } from "./consts/main";
+import { debug, info, setLevel } from "loglevel";
 
 import { ImgkMutationObserver } from "./editor_ext/mutation_ob";
 
 import { ImgkPluginExportDialog } from "./dialogs/export_opt_dialog";
-import { isTFile } from "./vault_util";
+import { asTFile, isTFile } from "./vault_util";
 import { t } from "./i18n/t";
+import { clearCaches } from "./img_cache";
+import { ImgkPluginSettingsDialog } from "./dialogs/plugin_settings_dialog";
+import { cloneDeep } from "lodash-es";
+import { ImgkPluginSettings } from "./settings/setting_types";
 
 export default class ImgMagicianPlugin extends MainPlugin {
 	settings: ImgkPluginSettings;
 	vaultHandler: VaultHandler;
 	context: MainPluginContext;
+	baseResourcePath: string | undefined;
+	baseResourcePathIdx: number;
 
-	private onSettingsUpdate(newSettings: ImgkPluginSettings) {
+	public onSettingsUpdate(newSettings: ImgkPluginSettings) {
 		return new Promise<void>(async (resolve, reject) => {
 			try {
 				await this.saveSettings(newSettings);
 				await this.cleanup();
 				await this.postInit();
+
 				this.vaultHandler.fullScan(false);
 
 				resolve();
@@ -44,7 +59,6 @@ export default class ImgMagicianPlugin extends MainPlugin {
 			}
 		});
 	}
-
 	/** TODO: Save instant export settings  */
 	notifyInstantExportSettingsUpdate = () => {};
 
@@ -72,6 +86,7 @@ export default class ImgMagicianPlugin extends MainPlugin {
 	private cleanup() {
 		return new Promise<void>(async (resolve, reject) => {
 			try {
+				debug("cleanup");
 				this.vaultHandler.stop();
 				this.app.workspace.containerEl.classList.remove(
 					"imgk-plugin-treat-vertical-overflow"
@@ -105,13 +120,9 @@ export default class ImgMagicianPlugin extends MainPlugin {
 	}
 
 	async onload() {
-		setLevel("INFO");
-		// setLevel("DEBUG");
-
-		this._mainObserver = new ImgkMutationObserver(document.body, {
-			childList: true,
-			subtree: true,
-		});
+		this.baseResourcePathIdx = -1;
+		// setLevel("INFO");
+		setLevel("DEBUG");
 
 		if (!PIE._magick) {
 			// initialize magick engine
@@ -125,11 +136,26 @@ export default class ImgMagicianPlugin extends MainPlugin {
 			}
 		}
 
+		if (!PIE._magick) {
+			const errorDialog = new Modal(this.app);
+			errorDialog.titleEl.setText(
+				`${PluginFullName}: ${t("ERROR_PLUGIN_START_UP")}`
+			);
+			errorDialog.contentEl.setText(t("ERROR_IMAGE_MAGICK_LOAD_FAILED"));
+			errorDialog.open();
+			return;
+		}
+
 		if (!PIE._psd) {
 			//initilize psd engine
 			PIE._psd = new psd.PluginPsdEngine();
 		}
 		this.context = { plugin: this };
+
+		this._mainObserver = new ImgkMutationObserver(document.body, {
+			childList: true,
+			subtree: true,
+		});
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(
@@ -156,9 +182,12 @@ export default class ImgMagicianPlugin extends MainPlugin {
 		await this.postInit();
 
 		this.app.workspace.onLayoutReady(() => {
-			this.handleOnLayoutReady();
+			this.handleOnLayoutReady()
+				.then(() => {})
+				.catch(() => {});
 		});
 
+		//DEBUG
 		// new ImgkPluginSettingsDialog(this.context, (newSettings) => {
 		// 	this.onSettingsUpdate(newSettings);
 		// }).open();
@@ -213,10 +242,11 @@ export default class ImgMagicianPlugin extends MainPlugin {
 
 		this.registerEvent(
 			this.app.workspace.on("file-menu", (menu, file) => {
-				if (!isTFile(file)) {
+				const tFile = asTFile(file);
+				if (!tFile) {
 					return;
 				}
-				const tFile = file as TFile;
+
 				const isSupported = this.settingsUtil.isExportSupportedFormat(
 					tFile.extension
 				);
@@ -294,7 +324,7 @@ export default class ImgMagicianPlugin extends MainPlugin {
 		if (newFailedExts.length > 0) {
 			const errorDialog = new Modal(this.app);
 			errorDialog.titleEl.setText(
-				`${PluginName}: ${t("WARN_PLUGIN_START_UP")}`
+				`${PluginFullName}: ${t("WARN_PLUGIN_START_UP")}`
 			);
 			errorDialog.contentEl.setText(
 				t("FORMAT_FAILED_EXT_LIST")
@@ -305,10 +335,104 @@ export default class ImgMagicianPlugin extends MainPlugin {
 		}
 	}
 
-	private handleOnLayoutReady() {
-		// this.setupHoverLink();
-		this.setupMarkdownPostProcessor();
-		this.setupLivePreview();
+	private async findBaseResourcePath(): Promise<string | undefined> {
+		let result: string | undefined;
+		let retryCount = 0;
+
+		while (retryCount < 3) {
+			retryCount += 1;
+			const testFileName = `__ImageMagicianPluginBasePathFinder__${retryCount}`;
+
+			let testAbstractFile: TAbstractFile | null | undefined =
+				this.app.vault.getAbstractFileByPath(testFileName);
+
+			if (testAbstractFile && !isTFile(testAbstractFile)) {
+				continue;
+			}
+
+			let removeTestFile = false;
+
+			if (!testAbstractFile) {
+				try {
+					testAbstractFile = await this.app.vault.create(
+						testFileName,
+						""
+					);
+					removeTestFile = true;
+				} catch (err) {}
+			}
+
+			if (!testAbstractFile) {
+				continue;
+			}
+
+			let testFile: TFile | undefined = asTFile(testAbstractFile);
+			const loopFinisher = async () => {
+				if (removeTestFile) {
+					try {
+						await this.app.vault.delete(testAbstractFile!);
+					} catch (err) {}
+				}
+			};
+			if (!testFile) {
+				await loopFinisher();
+				continue;
+			}
+
+			const resPath = this.app.vault.getResourcePath(testFile);
+			const basePathIdx = resPath.indexOf(testFileName);
+			let basePath: string = "";
+			if (basePathIdx >= 0) {
+				basePath = resPath.substring(0, basePathIdx);
+			}
+
+			if (basePath) {
+				result = basePath;
+				await loopFinisher();
+				break;
+			} else {
+				await loopFinisher();
+				continue;
+			}
+		}
+
+		if (result) {
+			try {
+				const url = new URL(result);
+				result = decodeURIComponent(url.pathname);
+			} catch (err) {}
+		}
+
+		return result;
+	}
+
+	private handleOnLayoutReady(): Promise<void> {
+		return new Promise(async (resolve, reject) => {
+			try {
+				this.baseResourcePathIdx = -1;
+				if (
+					Platform.isDesktopApp &&
+					this.app.vault.adapter instanceof FileSystemAdapter
+				) {
+					this.baseResourcePath =
+						this.app.vault.adapter.getBasePath();
+					this.baseResourcePathIdx =
+						this.baseResourcePath?.length ?? -1;
+				} else {
+					this.baseResourcePath = await this.findBaseResourcePath();
+					this.baseResourcePathIdx =
+						this.baseResourcePath?.length ?? -1;
+				}
+			} catch (err) {}
+
+			try {
+				// this.setupHoverLink();
+				this.setupMarkdownPostProcessor();
+				this.setupLivePreview();
+			} catch (err) {}
+
+			resolve();
+		});
 	}
 
 	/**
@@ -353,6 +477,7 @@ export default class ImgMagicianPlugin extends MainPlugin {
 	}
 
 	onunload() {
+		this.saveSettings(this.settings);
 		this._mainObserver.disconnect();
 		this.cleanup()
 			.then(() => {})
@@ -360,17 +485,27 @@ export default class ImgMagicianPlugin extends MainPlugin {
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign(
-			{},
-			DEFAULT_SETTINGS,
-			await this.loadData()
-		);
+		const savedData = await this.loadData();
+
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, savedData);
 		this.settingsUtil = new SettingsUtil(this.settings);
 	}
 
+	/**
+	 * TODO: this is not clarified
+	 */
 	async saveSettings(newSettings: ImgkPluginSettings) {
 		this.settings = newSettings;
+
+		//overwrite instantExport as default
+		this.settings.instantExport = cloneDeep(
+			DEFAULT_INSTANT_EXPORT_SETTINGS
+		);
+		debug("saveSettings", this.settings);
+
 		this.settingsUtil = new SettingsUtil(this.settings);
-		await this.saveData(newSettings);
+		clearCaches();
+
+		await this.saveData(this.settings);
 	}
 }

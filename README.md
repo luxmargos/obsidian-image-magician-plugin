@@ -15,40 +15,59 @@ If you find this plugin helpful, please consider supporting the project.
 
 [![Buy Me A Coffee](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/luxmargos)
 
-## Features
+## Key Features
 
--   Render
+### Dedicated view
 
-    -   Display various image formats in Obsidian without a third-party application. Add more formats within the plugin's settings.
-    -   Markdown inline link syntax is supported, such as `![[My Image.psd]]`.
-    -   HTML `<img>` tag is supported. However, it requires a resource path such as `src="app://..../My Image.psd"` to be visible. The Markdown link syntax, such as 'src="My Image.psd,"' is planned for a future update.
+Preview various image formats in Obsidian without a third-party app, such as PSD for Photoshop and over 100 formats powered by ImageMagick.
 
--   Export as png, jpg, webp
-    -   You can promptly export specific images through the context menu or a command.
-    -   The plugin features an auto-export functionality that triggers when the source file undergoes changes, determined by the file's modified date. You can customize which source files you wish to automatically export.
+### Natural markdown support like obsidian native images
+
+Markdown inline link syntax is supported, such as `![[My Image.psd]]`.
+Also, HTML `<img>` tag is supported.
+
+<img src="./docs/sc_my_balloon.png" width="400" />
+
+### Enhanced path detection in `<img>`
+
+This feature works for all `<img>` tags, including Obsidian's native image formats like png, jpg, and webp
+
+You can insert either a vault-based path or an inline link in the img tag. For example:
+
+-   `<img src="My Image.psd">`
+-   `<img src="[[My Image.psd]]">`
+
+<img src="./docs/sc_img_src.png" width="350" alt="Enhanced path detection in `<img>`" />
+
+### Export Dialog
+
+You can promptly export specific images through the context menu or a command, resize option is supported.
+
+<img src="./docs/sc_context_menu.png" width="200" alt="Export Dialog" />
+
+### Auto Export
+
+The plugin features an auto-export functionality that triggers when the source file undergoes changes, determined by the file's modified date. You can customize the options in Plugin's Settings.
+
+<img src="./docs/sc_auto_export.png" width="200" alt="Auto export" />
 
 ## Installation
 
 ### Manually Installing the Plugin
 
--   Create a plugin folder in your vault at `VaultFolder/.obsidian/plugins/image-magician-plugin`.
+-   Create a plugin folder in your vault at `VaultFolder/.obsidian/plugins/image-magician`.
 -   Download the latest release and copy over `main.js`, `styles.css`, and `manifest.json` into the folder.
 
 ### From the Community Plugins List
 
 Search and install "Image Magician" in Obsidian's community plugins browser, then enable the plugin.
 
-## Tips
-
-Also you can embed any image directly such as psd, tiff, heic that plugin has support and a preview in markdown works well.
-Although, using the boarder image formats are highly recommended such as jpg, png. I think that is more comfortable way, and plugin's auto-export feature will help it.
-
 ## Image formats
 
 You can try with any known image formats that see through the plugin settings.
 However, the plugin not guarantee it is works.
 
-### Default supported formats in plugin
+### Default listed formats in plugin
 
 Here the list below that registered as default supported formats in plugin.
 
@@ -95,14 +114,13 @@ These are listed on Image Magick library. But not works.
 
 ## Known problems and Tips
 
+### Rendering problems with export markdown as another format
+
+If you plan to export your markdown to another format or encounter rendering problems, it is recommended to change the 'Render Mode' option to 'Data URL'.
+
 ### Link suggestion
 
-This problem(or just intended flow of an obsidian) has been found at least obsidian 0.15.0.
-You might have not shown link suggestion when you embed 3rd party images that are not default supported in obsidian.
-You can resolve it through turning on the 'Settings > File & Links > Detect all file extensions'.
-And another way, use a plugin such as [Boost Link Suggestions](https://github.com/jglev/obsidian-boost-link-suggestions).
-
-This issue (or the intended behavior in Obsidian) has been identified in at least Obsidian 0.15.0. You may not see link suggestions when embedding third-party images that are not default supported in Obsidian. You can resolve this by turning on 'Settings > File & Links > Detect all file extensions.' Alternatively, you can use a plugin such as [Boost Link Suggestions](https://github.com/jglev/obsidian-boost-link-suggestions).
+This issue (or the intended behavior in Obsidian) has been identified in at least Obsidian 1.5.0. You may not see link suggestions when embedding non-obsidian-native images that are not default supported in Obsidian. You can resolve this by turning on 'Settings > File & Links > Detect all file extensions.' Alternatively, you can use a plugin such as [Boost Link Suggestions](https://github.com/jglev/obsidian-boost-link-suggestions).
 
 ## Format list in image-magick
 

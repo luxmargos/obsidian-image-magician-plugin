@@ -1,7 +1,7 @@
 import { Modal } from "obsidian";
 import { MainPluginContext } from "../context";
 import { ImgkPluginSettingTab } from "../settings/settings_tab";
-import { ImgkPluginSettings } from "../settings/settings";
+import { ImgkPluginSettings } from "../settings/setting_types";
 
 export class ImgkPluginSettingsDialog extends Modal {
 	private context: MainPluginContext;

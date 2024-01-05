@@ -1,5 +1,4 @@
 import { normalizePath } from "obsidian";
-import { dirname } from "path";
 import * as pb from "path-browserify";
 
 export const normalizeObsidianDir = (path: string) => {

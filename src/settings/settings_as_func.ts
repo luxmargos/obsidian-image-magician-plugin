@@ -1,19 +1,20 @@
 import { TFile, normalizePath } from "obsidian";
-import {
-	ImgkSizeAdjustType,
-	ImgkExportSettings,
-	ImgkImageSize,
-	ImgkPluginSettings,
-	ImgkFileFilter,
-	ImgkFileFilterType,
-	ImgkSize,
-	ImgkTextFilter,
-} from "./settings";
+
 import {
 	lowerCasedExtNameWithoutDot,
 	nonDotDirName,
 } from "../utils/obsidian_path";
 import * as pb from "path-browserify";
+import {
+	ImgkExportSettings,
+	ImgkFileFilter,
+	ImgkFileFilterType,
+	ImgkImageSize,
+	ImgkPluginSettings,
+	ImgkSize,
+	ImgkSizeAdjustType,
+	ImgkTextFilter,
+} from "./setting_types";
 
 const resolveSizeNum = (num?: number): number | undefined => {
 	if (num === undefined) {

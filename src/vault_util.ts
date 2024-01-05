@@ -1,32 +1,24 @@
 import { TAbstractFile, TFile } from "obsidian";
-import * as pb from "path-browserify";
 import { PluginContext } from "./context";
 
 export const isTFile = (file: TAbstractFile, allowedExts?: Set<string>) => {
-	// const result =
-	// 	(file as any)["stat"] !== undefined &&
-	// 	(file as any)["extension"] !== undefined;
-
 	const result = file instanceof TFile;
 	if (result && allowedExts) {
-		return allowedExts.has((file as TFile).extension);
+		return allowedExts.has(file.extension);
 	}
 	return result;
 };
 
-export const asTFile = (
-	context: PluginContext,
-	file: TAbstractFile
-): TFile | undefined => {
-	if (isTFile(file)) {
-		return file as TFile;
+export const asTFile = (file: TAbstractFile): TFile | undefined => {
+	if (file instanceof TFile) {
+		return file;
 	}
 
 	return undefined;
 };
 
-export const asTFileOrThrow = (context: PluginContext, file: TAbstractFile) => {
-	const result = asTFile(context, file);
+export const asTFileOrThrow = (file: TAbstractFile) => {
+	const result = asTFile(file);
 	if (!result) {
 		throw new Error("Not a file");
 	}
@@ -40,9 +32,9 @@ export const findValutFile = (
 ): TFile | undefined => {
 	const files = context.plugin.app.vault.getFiles();
 
-	let result: TFile | undefined = files.find((f: TFile) => {
+	let result = files.find((f: TFile) => {
 		return f.path === path;
-	}) as TFile;
+	});
 
 	// I think this is the link search behaviour of obsidian
 	if (!result && strictMode === false) {
