@@ -121,8 +121,8 @@ export default class ImgMagicianPlugin extends MainPlugin {
 
 	async onload() {
 		this.baseResourcePathIdx = -1;
-		// setLevel("INFO");
-		setLevel("DEBUG");
+		setLevel("INFO");
+		// setLevel("DEBUG");
 
 		if (!PIE._magick) {
 			// initialize magick engine
