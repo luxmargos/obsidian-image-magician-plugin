@@ -273,10 +273,6 @@ export function linkedImgHandler(
 			if (!titleNode.classList.contains("imgk-plugin-hidden")) {
 				titleNode.classList.add("imgk-plugin-hidden");
 			}
-
-			// titleNode.style.height = "0px";
-			// titleNode.style.opacity = "0";
-			// titleNode.style.pointerEvents = "none";
 		}
 
 		internalEmbed.classList.remove("file-embed");
@@ -547,9 +543,13 @@ export function attachImgFollower(
 		const newWidth = `${imgRect.width}px`;
 		const newHeight = `${imgRect.height}px`;
 
+		// /skip : obsidian. This code is intentionally designed for dynamic positioning.
 		imgOverlayEl!.style.left = newLeft;
+		// /skip : obsidian. This code is intentionally designed for dynamic positioning.
 		imgOverlayEl!.style.top = newTop;
+		// /skip : obsidian. This code is intentionally designed for dynamic positioning.
 		imgOverlayEl!.style.width = newWidth;
+		// /skip : obsidian. This code is intentionally designed for dynamic positioning.
 		imgOverlayEl!.style.height = newHeight;
 	};
 

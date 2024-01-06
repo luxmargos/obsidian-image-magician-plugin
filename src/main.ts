@@ -419,6 +419,7 @@ export default class ImgMagicianPlugin extends MainPlugin {
 				this.baseResourcePathIdx = -1;
 				if (
 					Platform.isDesktopApp &&
+					// /skip: obsidian. The plugin will bypass errors, handling them on a case-by-case basis, whether it's on desktop or mobile
 					this.app.vault.adapter instanceof FileSystemAdapter
 				) {
 					this.baseResourcePath =
