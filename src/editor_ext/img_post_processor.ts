@@ -85,7 +85,10 @@ export const processVaultBasedPath = (
 	if (srcPath) {
 		const srcFile = findValutFile(context, srcPath, false);
 		if (srcFile) {
-			imgEl.src = context.plugin.app.vault.getResourcePath(srcFile);
+			const srcResPath =
+				context.plugin.app.vault.getResourcePath(srcFile);
+			debug(`processVaultBasedPath: ${srcUrl} => ${srcResPath}`);
+			imgEl.src = srcResPath;
 		}
 	}
 };
@@ -100,12 +103,16 @@ export const handleImg = (
 	if (!(imgEl instanceof HTMLImageElement)) {
 		return;
 	}
+
 	const src = imgEl.getAttribute("src");
 	if (!src) {
 		return;
 	}
 
-	if (!src.startsWith("app://")) {
+	// desktop = "app://"
+	// ios = "capacitor://"
+	// android = ?
+	if (src.indexOf("://") < 0) {
 		return;
 	}
 
@@ -160,7 +167,6 @@ export const handleImg = (
 	let draw = !isLatestImgDrawnElement(imgEl, srcFile);
 
 	if (!draw) {
-		debug("pass redrawing");
 		return;
 	}
 

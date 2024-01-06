@@ -2,6 +2,7 @@ import {
 	FileSystemAdapter,
 	Modal,
 	Platform,
+	Plugin,
 	TAbstractFile,
 	TFile,
 	ViewCreator,
@@ -25,17 +26,18 @@ import { getMarkdownPostProcessor } from "./editor_ext/post_processor";
 import { Magick } from "@imagemagick/magick-wasm";
 
 import { PluginFullName, PluginName } from "./consts/main";
-import { debug, info, setLevel } from "loglevel";
+import log, { debug, info, setLevel } from "loglevel";
 
 import { ImgkMutationObserver } from "./editor_ext/mutation_ob";
 
 import { ImgkPluginExportDialog } from "./dialogs/export_opt_dialog";
-import { asTFile, isTFile } from "./vault_util";
+import { asTFile, findValutFile, isTFile } from "./vault_util";
 import { t } from "./i18n/t";
 import { clearCaches } from "./img_cache";
 import { ImgkPluginSettingsDialog } from "./dialogs/plugin_settings_dialog";
 import { cloneDeep } from "lodash-es";
 import { ImgkPluginSettings } from "./settings/setting_types";
+import { logLevelMobilePatcher } from "./utils/log_utils";
 
 export default class ImgMagicianPlugin extends MainPlugin {
 	settings: ImgkPluginSettings;
@@ -121,8 +123,13 @@ export default class ImgMagicianPlugin extends MainPlugin {
 
 	async onload() {
 		this.baseResourcePathIdx = -1;
-		setLevel("INFO");
-		// setLevel("DEBUG");
+		if (process.env.NODE_ENV === "development") {
+			setLevel("DEBUG");
+			logLevelMobilePatcher(this);
+			debug("DEV MODE");
+		} else {
+			setLevel("INFO");
+		}
 
 		if (!PIE._magick) {
 			// initialize magick engine
@@ -418,11 +425,37 @@ export default class ImgMagicianPlugin extends MainPlugin {
 						this.app.vault.adapter.getBasePath();
 					this.baseResourcePathIdx =
 						this.baseResourcePath?.length ?? -1;
-				} else {
+
+					debug("Reveal BasePath with Desktop");
+				} else if (
+					//@ts-ignore
+					this.app.vault.adapter["getBasePath"] &&
+					//@ts-ignore
+					typeof this.app.vault.adapter["getBasePath"] === "function"
+				) {
+					try {
+						//@ts-ignore
+						const func = this.app.vault.adapter.getBasePath;
+						this.baseResourcePath = func();
+						this.baseResourcePathIdx =
+							this.baseResourcePath?.length ?? -1;
+
+						debug("Reveal BasePath with Func");
+					} catch (err) {}
+				}
+
+				if (this.baseResourcePathIdx < 0) {
+					debug("Reveal BasePath manually");
 					this.baseResourcePath = await this.findBaseResourcePath();
 					this.baseResourcePathIdx =
 						this.baseResourcePath?.length ?? -1;
 				}
+
+				debug(
+					"FINAL BASE PATH : ",
+					this.baseResourcePath,
+					this.baseResourcePathIdx
+				);
 			} catch (err) {}
 
 			try {
