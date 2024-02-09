@@ -1,7 +1,7 @@
 {
 	"id": "image-magician",
 	"name": "Image Magician",
-	"version": "0.1.5",
+	"version": "0.1.6",
 	"minAppVersion": "0.15.0",
 	"description": "Supports viewing and exporting various image formats powerd by ImageMagick.",
 	"author": "luxmargos",

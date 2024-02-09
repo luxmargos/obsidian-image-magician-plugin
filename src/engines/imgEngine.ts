@@ -1,7 +1,7 @@
 import { TFile, normalizePath } from "obsidian";
 import { genExportPath } from "../export_pack/export_utils";
 import { MainPluginContext, PluginContext } from "../context";
-import { findValutFile } from "../vault_util";
+import { findVaultFile } from "../vault_util";
 import {
 	ImageAdjFunc,
 	ImgkRuntimeExportSettings,
@@ -112,7 +112,7 @@ export type ExportDstInfo = {
 	isLatest: boolean;
 };
 
-//TODO: size difference detection
+//TODO: Different size detection
 export const resolveExportDstInfo = (
 	context: MainPluginContext,
 	source: TFile,
@@ -128,9 +128,10 @@ export const resolveExportDstInfo = (
 		return undefined;
 	}
 
-	const exportFile: TFile | undefined = findValutFile(
+	const exportFile: TFile | undefined = findVaultFile(
 		context,
-		exportPathData.dst.path
+		exportPathData.dst.path,
+		true
 	);
 
 	const isLatest: boolean =

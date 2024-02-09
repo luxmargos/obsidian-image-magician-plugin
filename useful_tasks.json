@@ -1,0 +1,51 @@
+{
+    "name":"Setup",
+    //Optional.
+    "env":{
+        //Optional. Specify the logging level as 'info', 'debug', or 'none'.
+        //Default="info"
+        "logLevel":"info"
+    },
+    "tasks":[
+        {
+            //To output a text
+            "type":"output",
+            "text":"Hello world!",
+            //Optional. 'console' or 'c', 'file-write' or 'fw', 'file-append' or 'fa'. 
+            //Default="console"
+            "target":"file-write",
+            //Optional. But required on "target" is "file".
+            "path":"./test-vault/HelloWorld.md"
+        },
+        {
+            //To output a text
+            "type":"output",
+            "text":"",
+            //Optional. 'console' or 'c', 'file-write' or 'fw', 'file-append' or 'fa'. 
+            //Default="console"
+            "target":"file-write",
+            //Optional. But required on "target" is "file".
+            "path":"./test-vault/.obsidian/plugins/.useless"
+        },
+        {
+            "type":"symlink",
+            
+            //"TARGET PATH of SYMLINK"
+            "target":".",
+            
+            //"SYMLINK DESTINATION PATH"
+            "path":"./test-vault/.obsidian/plugins/image-magician",
+            
+            //Remove an existing path and recreate a symlink each time the process is executed
+            "forced":true,
+            
+            //'dir', 'file', 'junction'
+            "linkType":"dir"
+        },
+        {
+            "type":"output",
+            "text":"##############################################################\nOpen obsidian application and open vault located at 'test-vault'\n##############################################################",
+            "target":"console"
+        }
+    ]
+}

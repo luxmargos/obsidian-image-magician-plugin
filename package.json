@@ -1,10 +1,10 @@
 {
 	"name": "obsidian-image-magician-plugin",
-	"version": "0.1.5",
+	"version": "0.1.6",
 	"description": "This is a plugin for Obsidian (https://obsidian.md). Supports viewing and exporting various image formats using ImageMagick.",
 	"main": "main.js",
 	"scripts": {
-		"prepare": "npm run build",
+		"prepare": "useful-tasks --config useful_tasks.json && npm run build",
 		"dev": "node esbuild.config.mjs development",
 		"build": "npm run version && tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
 		"version": "node version-bump.mjs && git add manifest.json versions.json"
@@ -42,13 +42,15 @@
 		"esbuild-plugin-wasm": "^1.1.0",
 		"obsidian": "latest",
 		"tslib": "2.4.0",
-		"typescript": "4.7.4"
+		"typescript": "4.7.4",
+		"useful-tasks": "^0.1.29"
 	},
 	"dependencies": {
 		"@codemirror/language": "^6.9.3",
 		"@imagemagick/magick-wasm": "^0.0.26",
 		"@webtoon/psd": "^0.4.0",
 		"compare-versions": "^6.1.0",
+		"file-url": "^4.0.0",
 		"lodash-es": "^4.17.21",
 		"loglevel": "^1.8.1",
 		"path-browserify": "^1.0.1"

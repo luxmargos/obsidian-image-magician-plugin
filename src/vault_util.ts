@@ -25,24 +25,23 @@ export const asTFileOrThrow = (file: TAbstractFile) => {
 	return result;
 };
 
-export const findValutFile = (
+export const findVaultFile = (
 	context: PluginContext,
 	path: string,
-	strictMode: boolean = true
+	strictMode:boolean
 ): TFile | undefined => {
-	const files = context.plugin.app.vault.getFiles();
-
-	let result = files.find((f: TFile) => {
-		return f.path === path;
-	});
-
-	// I think this is the link search behaviour of obsidian
-	if (!result && strictMode === false) {
-		result = files.find((f: TFile) => {
-			//TEST : 'test.md' will be matched with 'FOLDER/test.md'
-			return f.path.endsWith(path);
-		});
+	const aFile = context.plugin.app.vault.getAbstractFileByPath(path);
+	
+	if(aFile){
+		return asTFile(aFile);
 	}
 
-	return result;
+	if(!strictMode){
+		const file = context.plugin.app.metadataCache.getFirstLinkpathDest(path, "");
+		if(file){
+			return file;
+		}
+	}
+	
+	return undefined;
 };

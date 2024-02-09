@@ -2,7 +2,7 @@ import { TFile, normalizePath } from "obsidian";
 
 import { EditorView } from "@codemirror/view";
 
-import { findValutFile, isTFile } from "../vault_util";
+import { findVaultFile, isTFile } from "../vault_util";
 import { MainPluginContext } from "../context";
 import { PIE } from "../engines/imgEngines";
 
@@ -83,7 +83,7 @@ export const processVaultBasedPath = (
 	}
 
 	if (srcPath) {
-		const srcFile = findValutFile(context, srcPath, false);
+		const srcFile = findVaultFile(context, srcPath, false);
 		if (srcFile) {
 			const srcResPath =
 				context.plugin.app.vault.getResourcePath(srcFile);
@@ -150,7 +150,7 @@ export const handleImg = (
 		fullResPath.substring(context.plugin.baseResourcePathIdx)
 	);
 
-	srcFile = findValutFile(context, valutRelativePath, true);
+	srcFile = findVaultFile(context, valutRelativePath, true);
 
 	if (!srcFile) {
 		return;
@@ -228,7 +228,7 @@ export function linkedImgHandler(
 			continue;
 		}
 
-		const srcFile = findValutFile(context, src, false);
+		const srcFile = findVaultFile(context, src, false);
 		if (!srcFile) {
 			continue;
 		}

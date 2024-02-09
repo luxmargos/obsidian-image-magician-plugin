@@ -9,7 +9,7 @@ import {
 import { MainPluginContext } from "../context";
 import { ImgkPluginSettingTab } from "../settings/settings_tab";
 import { debug } from "loglevel";
-import { findValutFile } from "../vault_util";
+import { findVaultFile } from "../vault_util";
 import { convertExportSettingsToRuntime } from "../settings/settings_as_func";
 import { t } from "../i18n/t";
 import {
@@ -180,7 +180,7 @@ export class ImgkPluginExportDialog extends Modal {
 					if (!srcPath) {
 						return;
 					}
-					const srcFile = findValutFile(this.context, srcPath, true);
+					const srcFile = findVaultFile(this.context, srcPath, true);
 					if (!srcFile) {
 						return;
 					}

@@ -1,7 +1,7 @@
 import { TAbstractFile, TFile, hexToArrayBuffer } from "obsidian";
 import { MainPluginContext } from "./context";
 import { exportImage, genExportPath } from "./export_pack/export_utils";
-import { asTFile, findValutFile } from "./vault_util";
+import { asTFile, findVaultFile } from "./vault_util";
 import * as pb from "path-browserify";
 import { SettingsUtil } from "./settings/settings";
 import { ImgkRuntimeExportSettings } from "./settings/settings_as_func";
@@ -180,9 +180,10 @@ export class VaultHandler {
 				continue;
 			}
 
-			const existingExportedFile = findValutFile(
+			const existingExportedFile = findVaultFile(
 				context,
-				existingExportedFilePath
+				existingExportedFilePath,
+				true
 			);
 			if (!existingExportedFile) {
 				continue;
@@ -232,7 +233,7 @@ export class VaultHandler {
 				continue;
 			}
 
-			const exportedFile = findValutFile(this.context, exportedFilePath);
+			const exportedFile = findVaultFile(this.context, exportedFilePath, true);
 			if (!exportedFile) {
 				continue;
 			}
