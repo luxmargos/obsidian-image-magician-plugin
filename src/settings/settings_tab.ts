@@ -29,6 +29,7 @@ import { exportFormatList } from "../export_pack/export_types";
 import {
 	ImgkExportSettings,
 	ImgkFileFilterType,
+	ImgkFolderDeterminer,
 	ImgkImageSize,
 	ImgkPluginSettings,
 	ImgkSizeAdjustType,
@@ -373,12 +374,12 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 				}
 			} else {
 				try {
-					if (settings.pathOpts.sourceExts.length < 1) {
+					if (pathOpts.sourceExts.length < 1) {
 						throw new Error("No source extensions");
 					}
 
-					const firstSourceExt = settings.pathOpts.sourceExts[0];
-					const otherExts = settings.pathOpts.sourceExts.filter(
+					const firstSourceExt = pathOpts.sourceExts[0];
+					const otherExts = pathOpts.sourceExts.filter(
 						(item, itemIndex) => {
 							return itemIndex > 0;
 						}
@@ -386,9 +387,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 
 					let testFileName = "My Image.";
 					let testFilePath = testFileName + firstSourceExt;
-					let srcDir = normalizeObsidianDir(
-						settings.pathOpts.sourceDir
-					);
+					let srcDir = normalizeObsidianDir(pathOpts.sourceDir);
 					if (srcDir.length > 0) {
 						testFilePath = `${srcDir}/${testFilePath}`;
 					}
@@ -442,10 +441,10 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 
 			sourceFolderSet.addText((comp: TextComponent) => {
 				comp.inputEl.classList.add("imgk-wide-input");
-				comp.setValue(settings.pathOpts.sourceDir);
+				comp.setValue(pathOpts.sourceDir);
 
 				comp.onChange((value) => {
-					settings.pathOpts.sourceDir = normalizeObsidianDir(value);
+					pathOpts.sourceDir = normalizeObsidianDir(value);
 					refreshExportPreview();
 				});
 			});
@@ -454,9 +453,9 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 				.setName(t("RECURSIVE"))
 				.setDesc(t("RECURSIVE_DESC"))
 				.addToggle((comp) => {
-					comp.setValue(settings.pathOpts.recursiveSources);
+					comp.setValue(pathOpts.recursiveSources);
 					comp.onChange((value) => {
-						settings.pathOpts.recursiveSources = value;
+						pathOpts.recursiveSources = value;
 					});
 				});
 
@@ -466,10 +465,10 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 				t("IMAGE_FORMAT_FILTER_DESC"),
 				t("FORMATS_PLACEHOLDER"),
 				false,
-				() => settings.pathOpts.sourceExts,
+				() => pathOpts.sourceExts,
 				() => [],
 				(value: string[]) => {
-					settings.pathOpts.sourceExts = value;
+					pathOpts.sourceExts = value;
 				},
 				() => {
 					refreshExportPreview();
@@ -481,7 +480,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 				t("FILTERS_DESC"),
 				false,
 				containerEl,
-				settings.pathOpts.sourceFilters,
+				pathOpts.sourceFilters,
 				() => {
 					return {
 						active: true,
@@ -510,7 +509,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 			const builtInFiltersName = t("BUILT_IN_FILTERS");
 			const refreshBuiltInFiltersName = () => {
 				let activeCount = 0;
-				settings.pathOpts.builtInSourceFilters.forEach((item) => {
+				pathOpts.builtInSourceFilters.forEach((item) => {
 					if (item.active) {
 						activeCount += 1;
 					}
@@ -550,7 +549,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 				});
 
 			builtInFiltersListDiv = this.createListDiv(containerEl);
-			for (const filter of settings.pathOpts.builtInSourceFilters) {
+			for (const filter of pathOpts.builtInSourceFilters) {
 				const filterSet = new Setting(builtInFiltersListDiv);
 				if (filter.type === ImgkFileFilterType.DoubleExtsBlocker) {
 					filterSet.setName(t("DOUBLE_EXTS_BLOCKER"));
@@ -574,7 +573,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 		dstSet.setHeading();
 
 		const refreshExportView = () => {
-			if (pathOpts.asRelativePath) {
+			if (pathOpts.folderDeterminer === ImgkFolderDeterminer.Relative) {
 				exportDirAbsSet.settingEl.hide();
 				exportDirRelativeSet.settingEl.show();
 			} else {
@@ -585,15 +584,30 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 			refreshExportPreview();
 		};
 		exportPathTypeSet = new Setting(containerEl);
-		exportPathTypeSet.setName(t("AS_RELATIVE_FOLDER"));
-		exportPathTypeSet.setDesc(t("AS_RELATIVE_FOLDER_DESC"));
+		exportPathTypeSet.setName(t("FOLDER_LOCATION"));
+		exportPathTypeSet.setDesc(t("FOLDER_LOCATION_DESC"));
 
-		exportPathTypeSet.addToggle((comp: ToggleComponent) => {
-			comp.setValue(pathOpts.asRelativePath);
-			comp.onChange((value) => {
-				pathOpts.asRelativePath = value;
+		exportPathTypeSet.addDropdown((comp: DropdownComponent) => {
+			comp.addOption(
+				ImgkFolderDeterminer.Relative.toString(),
+				t("FOLDER_LOCATION_TYPE_RELATIVE")
+			);
+			comp.addOption(
+				ImgkFolderDeterminer.AbsoluteAndReflectFolderStructure.toString(),
+				t("FOLDER_LOCATION_TYPE_ABSOLUTE_WITH_REFLECT_STRUCTURE")
+			);
+			comp.addOption(
+				ImgkFolderDeterminer.Absolute.toString(),
+				t("FOLDER_LOCATION_TYPE_ABSOLUTE")
+			);
+
+			comp.onChange((value: string) => {
+				const valueNum = Number(value) as ImgkFolderDeterminer;
+				pathOpts.folderDeterminer = valueNum;
 				refreshExportView();
 			});
+
+			comp.setValue(pathOpts.folderDeterminer.toString());
 		});
 
 		exportDirAbsSet = new Setting(containerEl);
@@ -626,13 +640,13 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 
 		const refreshFileNameFormatSets = () => {
 			customFileNameFormatSet?.settingEl.toggle(
-				settings.pathOpts.useCustomFileNameFormat
+				pathOpts.useCustomFileNameFormat
 			);
 			fileNameFormatPrefixSet?.settingEl.toggle(
-				!settings.pathOpts.useCustomFileNameFormat
+				!pathOpts.useCustomFileNameFormat
 			);
 			fileNameFormatSuffixSet?.settingEl.toggle(
-				!settings.pathOpts.useCustomFileNameFormat
+				!pathOpts.useCustomFileNameFormat
 			);
 			refreshExportPreview();
 		};
@@ -641,8 +655,8 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 		fileNameFormatSet.setName("Use custom file name format");
 		fileNameFormatSet.addToggle((comp) => {
 			comp.onChange((value) => {
-				settings.pathOpts.useCustomFileNameFormat =
-					!settings.pathOpts.useCustomFileNameFormat;
+				pathOpts.useCustomFileNameFormat =
+					!pathOpts.useCustomFileNameFormat;
 				refreshFileNameFormatSets();
 			});
 
@@ -653,7 +667,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 		let customNameFormatSetComp: TextComponent;
 
 		const refreshCustomNameFormatState = () => {
-			if (settings.pathOpts.customFileNameFormat.trim().length < 1) {
+			if (pathOpts.customFileNameFormat.trim().length < 1) {
 				customFileNameFormatSet.settingEl.addClass("imgk-warning");
 				customNameFormatSetComp?.inputEl.addClass("imgk-warning");
 			} else {
@@ -663,17 +677,14 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 		};
 
 		const setCustomNameFormatControlValue = () => {
-			customNameFormatSetComp?.setValue(
-				settings.pathOpts.customFileNameFormat
-			);
+			customNameFormatSetComp?.setValue(pathOpts.customFileNameFormat);
 		};
 
 		customFileNameFormatSet.setName(t("FILE_NAME_FORMAT"));
 		customFileNameFormatSet.addExtraButton((comp) => {
 			comp.setIcon("reset");
 			comp.onClick(() => {
-				settings.pathOpts.customFileNameFormat =
-					DEFAULT_FILE_NAME_FORMAT;
+				pathOpts.customFileNameFormat = DEFAULT_FILE_NAME_FORMAT;
 				setCustomNameFormatControlValue();
 				refreshCustomNameFormatState();
 				refreshExportPreview();
@@ -683,7 +694,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 			customNameFormatSetComp = comp;
 			comp.inputEl.classList.add("imgk-wide-input");
 			comp.onChange((value: string) => {
-				settings.pathOpts.customFileNameFormat = value;
+				pathOpts.customFileNameFormat = value;
 				refreshExportPreview();
 				refreshCustomNameFormatState();
 			});
@@ -693,9 +704,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 
 		let fileNamePrefixSetComp: TextComponent;
 		const setFileNamePrefixControlValue = () => {
-			fileNamePrefixSetComp?.setValue(
-				settings.pathOpts.fileNameFormatPrefix
-			);
+			fileNamePrefixSetComp?.setValue(pathOpts.fileNameFormatPrefix);
 		};
 
 		fileNameFormatPrefixSet = new Setting(containerEl);
@@ -703,8 +712,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 		fileNameFormatPrefixSet.addExtraButton((comp) => {
 			comp.setIcon("reset");
 			comp.onClick(() => {
-				settings.pathOpts.fileNameFormatPrefix =
-					DEFAULT_FILE_NAME_PREFIX;
+				pathOpts.fileNameFormatPrefix = DEFAULT_FILE_NAME_PREFIX;
 				setFileNamePrefixControlValue();
 				refreshExportPreview();
 			});
@@ -712,7 +720,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 		fileNameFormatPrefixSet.addText((comp: TextComponent) => {
 			fileNamePrefixSetComp = comp;
 			comp.onChange((value) => {
-				settings.pathOpts.fileNameFormatPrefix = value;
+				pathOpts.fileNameFormatPrefix = value;
 				refreshExportPreview();
 			});
 			setFileNamePrefixControlValue();
@@ -720,9 +728,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 
 		let fileNameSuffixSetComp: TextComponent;
 		const setFileNameSuffixControlValue = () => {
-			fileNameSuffixSetComp?.setValue(
-				settings.pathOpts.fileNameFormatSuffix
-			);
+			fileNameSuffixSetComp?.setValue(pathOpts.fileNameFormatSuffix);
 		};
 
 		fileNameFormatSuffixSet = new Setting(containerEl);
@@ -730,8 +736,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 		fileNameFormatSuffixSet.addExtraButton((comp) => {
 			comp.setIcon("reset");
 			comp.onClick(() => {
-				settings.pathOpts.fileNameFormatSuffix =
-					DEFAULT_FILE_NAME_SUFFIX;
+				pathOpts.fileNameFormatSuffix = DEFAULT_FILE_NAME_SUFFIX;
 				setFileNameSuffixControlValue();
 				refreshExportPreview();
 			});
@@ -739,7 +744,7 @@ export class ImgkPluginSettingTab extends PluginSettingTab {
 		fileNameFormatSuffixSet.addText((comp: TextComponent) => {
 			fileNameSuffixSetComp = comp;
 			comp.onChange((value) => {
-				settings.pathOpts.fileNameFormatSuffix = value;
+				pathOpts.fileNameFormatSuffix = value;
 				refreshExportPreview();
 			});
 			setFileNameSuffixControlValue();

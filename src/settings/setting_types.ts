@@ -15,6 +15,12 @@ export enum ImgkFileFilterType {
 	DoubleExtsBlocker = 4,
 }
 
+export enum ImgkFolderDeterminer {
+	Relative = 0,
+	AbsoluteAndReflectFolderStructure = 1,
+	Absolute = 2,
+}
+
 export interface ImgkFileFilter {
 	active: boolean;
 	type: ImgkFileFilterType;
@@ -35,7 +41,9 @@ export interface ImgkExportPath {
 	sourceFilters: ImgkTextFilter[];
 	useBuiltInSourceFilters: boolean;
 	builtInSourceFilters: ImgkFileFilter[];
-	asRelativePath: boolean;
+	/** @deprecated */
+	asRelativePath?: boolean;
+	folderDeterminer: ImgkFolderDeterminer;
 	exportDirAbs: string;
 	exportDirRel: string;
 	useCustomFileNameFormat: boolean;

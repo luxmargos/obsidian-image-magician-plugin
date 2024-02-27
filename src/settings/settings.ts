@@ -15,11 +15,14 @@ import {
 import { asTFile, isTFile } from "../vault_util";
 import packageJson from "../../package.json";
 import {
+	ImgkExportPath,
 	ImgkExportSettings,
 	ImgkFileFilterType,
+	ImgkFolderDeterminer,
 	ImgkPluginSettings,
 } from "./setting_types";
 import { ExportFormatPng } from "../export_pack/export_types";
+import { UnsupportedChannelKindOffset } from "@webtoon/psd/dist/utils";
 
 export const DEFAULT_EXPORT_SUPPORTED_FORMATS = [
 	"psd",
@@ -107,7 +110,9 @@ export const DEFAULT_EXPORT_SETTINGS: ImgkExportSettings = {
 		],
 		sourceExts: [],
 		sourceFilters: [],
-		asRelativePath: false,
+		// asRelativePath: false,
+		folderDeterminer:
+			ImgkFolderDeterminer.AbsoluteAndReflectFolderStructure,
 		exportDirAbs: "Exported Images",
 		exportDirRel: "",
 		useCustomFileNameFormat: false,
@@ -117,14 +122,37 @@ export const DEFAULT_EXPORT_SETTINGS: ImgkExportSettings = {
 	},
 };
 
-const cloneDefaultExportSettings = () => {
+export const migrageFolderDeterminer = (
+	pathOpts: ImgkExportPath,
+	defaultFolderDeterminer: ImgkFolderDeterminer
+) => {
+	if (pathOpts["asRelativePath"] !== undefined) {
+		console.log("migrate ", JSON.stringify(pathOpts, null, 2));
+
+		const value: boolean = pathOpts["asRelativePath"];
+		if (value === true) {
+			pathOpts.folderDeterminer = ImgkFolderDeterminer.Relative;
+		} else {
+			pathOpts.folderDeterminer =
+				ImgkFolderDeterminer.AbsoluteAndReflectFolderStructure;
+		}
+
+		delete pathOpts["asRelativePath"];
+	}
+
+	if (pathOpts["folderDeterminer"] === undefined) {
+		pathOpts.folderDeterminer = defaultFolderDeterminer;
+	}
+};
+
+const cloneDefaultExportSettingsForInstant = () => {
 	const defaultSettings = cloneDeep(DEFAULT_EXPORT_SETTINGS);
-	defaultSettings.pathOpts.asRelativePath = true;
+	defaultSettings.pathOpts.folderDeterminer = ImgkFolderDeterminer.Relative;
 	return defaultSettings;
 };
 
 export const DEFAULT_INSTANT_EXPORT_SETTINGS: ImgkExportSettings =
-	cloneDefaultExportSettings();
+	cloneDefaultExportSettingsForInstant();
 
 export const getWarnList = () => {
 	if (satisfies(apiVersion, ">=1.5.3")) {

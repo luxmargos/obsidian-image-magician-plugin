@@ -17,6 +17,7 @@ import {
 	DEFAULT_INSTANT_EXPORT_SETTINGS,
 	DEFAULT_SETTINGS,
 	SettingsUtil,
+	migrageFolderDeterminer,
 } from "./settings/settings";
 import { MainPlugin, MainPluginContext } from "./context";
 import { ImgkPluginSettingTab } from "./settings/settings_tab";
@@ -35,9 +36,13 @@ import { asTFile, isTFile } from "./vault_util";
 import { t } from "./i18n/t";
 import { clearCaches } from "./img_cache";
 import { cloneDeep } from "lodash-es";
-import { ImgkPluginSettings } from "./settings/setting_types";
+import {
+	ImgkFolderDeterminer,
+	ImgkPluginSettings,
+} from "./settings/setting_types";
 import fileUrl from "file-url";
 import { logLevelMobilePatcher } from "./utils/log_utils";
+import packageJson from "../package.json";
 
 export default class ImgMagicianPlugin extends MainPlugin {
 	settings: ImgkPluginSettings;
@@ -429,31 +434,34 @@ export default class ImgMagicianPlugin extends MainPlugin {
 						this.app.vault.adapter.getBasePath();
 
 					debug("Reveal BasePath with Desktop");
-				} else{
+				} else {
 					try {
-						if(
+						if (
 							//@ts-ignore
 							this.app.vault.adapter["getBasePath"] &&
 							//@ts-ignore
-							typeof this.app.vault.adapter["getBasePath"] === "function"
-						){
+							typeof this.app.vault.adapter["getBasePath"] ===
+								"function"
+						) {
 							debug("Reveal BasePath with Func");
-							//@ts-ignore
-							const getBasePathFunc = this.app.vault.adapter.getBasePath;
+							const getBasePathFunc =
+								//@ts-ignore
+								this.app.vault.adapter.getBasePath;
 							this.baseResourcePath = getBasePathFunc();
 						}
 					} catch (err) {}
 				}
 
-				if(this.baseResourcePath){
-					try{
+				if (this.baseResourcePath) {
+					try {
 						const fileUrlString = fileUrl(this.baseResourcePath);
 						const url = new URL(fileUrlString);
 						this.baseResourcePath = url.pathname;
-					}catch(e){}
+					} catch (e) {}
 
-					if(this.baseResourcePath){
-						this.baseResourcePathIdx = this.baseResourcePath?.length ?? -1;
+					if (this.baseResourcePath) {
+						this.baseResourcePathIdx =
+							this.baseResourcePath?.length ?? -1;
 					}
 				}
 
@@ -534,6 +542,28 @@ export default class ImgMagicianPlugin extends MainPlugin {
 		const savedData = await this.loadData();
 
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, savedData);
+		//MINGRATION
+		//Legacy
+		if (this.settings.version === undefined) {
+		} else {
+		}
+		//
+
+		migrageFolderDeterminer(
+			this.settings.instantExport.pathOpts,
+			ImgkFolderDeterminer.Relative
+		);
+
+		for (const autoExportSettings of this.settings.autoExportList) {
+			migrageFolderDeterminer(
+				autoExportSettings.pathOpts,
+				ImgkFolderDeterminer.AbsoluteAndReflectFolderStructure
+			);
+		}
+
+		this.settings.version = packageJson.version;
+		//END OF MIGRATION
+
 		this.settingsUtil = new SettingsUtil(this.settings);
 	}
 

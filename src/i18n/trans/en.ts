@@ -78,9 +78,14 @@ export default {
 	DOUBLE_EXTS_BLOCKER_DESC:
 		"Avoid export if source file has at least two extensions. The filter determine file is already exported from another source. e.g, 'MyImage.psd.exported.png'",
 
-	AS_RELATIVE_FOLDER: "As relative folder",
-	AS_RELATIVE_FOLDER_DESC:
-		"If turned on, all exported images will be generated relative to their source file. Otherwise, they will be generated into the absolute folder.",
+	FOLDER_LOCATION: "Folder location",
+	FOLDER_LOCATION_DESC:
+		"Specify the folder location where the generated file will be placed.",
+
+	FOLDER_LOCATION_TYPE_RELATIVE: "Relative",
+	FOLDER_LOCATION_TYPE_ABSOLUTE_WITH_REFLECT_STRUCTURE:
+		"Absolute, reflect source's folder structure",
+	FOLDER_LOCATION_TYPE_ABSOLUTE: "Absolute",
 
 	FOLDER_ABSOLUTE: "Folder (Absolute)",
 	FOLDER_RELATIVE: "Folder (Relative)",

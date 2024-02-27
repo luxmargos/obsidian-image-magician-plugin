@@ -1,7 +1,10 @@
 import { TFile, normalizePath } from "obsidian";
 import * as bp from "path-browserify";
 import { ExportFormat, ExportPathData, exportFormatList } from "./export_types";
-import { ImgkExportSettings } from "../settings/setting_types";
+import {
+	ImgkExportSettings,
+	ImgkFolderDeterminer,
+} from "../settings/setting_types";
 import { ImgkRuntimeExportSettings } from "../settings/settings_as_func";
 import { resolveExportDstInfo } from "../engines/imgEngine";
 import { MainPluginContext } from "../context";
@@ -29,11 +32,11 @@ export const buildFileNameFormat = (prefix: string, suffix: string) => {
 };
 
 /**
- * 
- * @param settings 
- * @param srcFile 
- * @param specificDst Optional. Specifies the destination file path.  If provided, 'settings' will be ignored. Used for instant export. 
- * @returns 
+ *
+ * @param settings
+ * @param srcFile
+ * @param specificDst Optional. Specifies the destination file path.  If provided, 'settings' will be ignored. Used for instant export.
+ * @returns
  */
 export const genExportPath = (
 	settings: ImgkExportSettings,
@@ -43,7 +46,7 @@ export const genExportPath = (
 	const srcFilePath: string =
 		srcFile instanceof TFile ? srcFile.path : srcFile;
 
-	const dir = bp.dirname(srcFilePath);
+	const srcFileDir = bp.dirname(srcFilePath);
 
 	const srcFileName = bp.basename(srcFilePath);
 	let srcFileNameWithoutExt = bp.basename(srcFilePath);
@@ -98,16 +101,22 @@ export const genExportPath = (
 			return undefined;
 		}
 
-		let dirText = dir;
-		if (!settings.pathOpts.asRelativePath) {
-			if (dir.length > 0 && dir !== ".") {
-				dirText = settings.pathOpts.exportDirAbs + "/" + dir;
+		let dirText = srcFileDir;
+		const fd = settings.pathOpts.folderDeterminer;
+
+		if (fd === ImgkFolderDeterminer.Absolute) {
+			dirText = settings.pathOpts.exportDirAbs;
+		} else if (
+			fd === ImgkFolderDeterminer.AbsoluteAndReflectFolderStructure
+		) {
+			if (srcFileDir.length > 0 && srcFileDir !== ".") {
+				dirText = settings.pathOpts.exportDirAbs + "/" + srcFileDir;
 			} else {
 				dirText = settings.pathOpts.exportDirAbs;
 			}
 		} else {
-			if (dir.length > 0 && dir !== ".") {
-				dirText = dir + "/" + settings.pathOpts.exportDirRel;
+			if (srcFileDir.length > 0 && srcFileDir !== ".") {
+				dirText = srcFileDir + "/" + settings.pathOpts.exportDirRel;
 			} else {
 				dirText = settings.pathOpts.exportDirRel;
 			}
