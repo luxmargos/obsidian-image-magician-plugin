@@ -37,6 +37,7 @@ import { clearCaches } from "./img_cache";
 import { cloneDeep } from "lodash-es";
 import { ImgkPluginSettings } from "./settings/setting_types";
 import fileUrl from "file-url";
+import { logLevelMobilePatcher } from "./utils/log_utils";
 
 export default class ImgMagicianPlugin extends MainPlugin {
 	settings: ImgkPluginSettings;
@@ -445,12 +446,12 @@ export default class ImgMagicianPlugin extends MainPlugin {
 				}
 
 				if(this.baseResourcePath){
-					if(!this.baseResourcePath.startsWith("/")){
-						try{
-							const url = new URL(fileUrl(this.baseResourcePath));
-							this.baseResourcePath = url.pathname;
-						}catch(e){}
-					}
+					try{
+						const fileUrlString = fileUrl(this.baseResourcePath);
+						const url = new URL(fileUrlString);
+						this.baseResourcePath = url.pathname;
+					}catch(e){}
+
 					if(this.baseResourcePath){
 						this.baseResourcePathIdx = this.baseResourcePath?.length ?? -1;
 					}
