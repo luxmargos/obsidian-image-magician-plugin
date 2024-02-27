@@ -161,7 +161,7 @@ export const DEFAULT_SETTINGS: ImgkPluginSettings = {
 	supportMdImageSizeFormat: true,
 
 	trackRename: true,
-	trackDelete: true,
+	trackDelete: false,
 
 	vaultBasedPathSupporter: {
 		enabled: true,

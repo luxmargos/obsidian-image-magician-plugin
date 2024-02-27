@@ -28,6 +28,13 @@ export const buildFileNameFormat = (prefix: string, suffix: string) => {
 	);
 };
 
+/**
+ * 
+ * @param settings 
+ * @param srcFile 
+ * @param specificDst Optional. Specifies the destination file path.  If provided, 'settings' will be ignored. Used for instant export. 
+ * @returns 
+ */
 export const genExportPath = (
 	settings: ImgkExportSettings,
 	srcFile: TFile | string,
