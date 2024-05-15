@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-image-magician-plugin",
-	"version": "0.1.8",
+	"version": "0.1.9",
 	"description": "This is a plugin for Obsidian (https://obsidian.md). Supports viewing and exporting various image formats using ImageMagick.",
 	"main": "main.js",
 	"scripts": {
@@ -47,7 +47,7 @@
 	},
 	"dependencies": {
 		"@codemirror/language": "^6.9.3",
-		"@imagemagick/magick-wasm": "^0.0.26",
+		"@imagemagick/magick-wasm": "^0.0.29",
 		"@webtoon/psd": "^0.4.0",
 		"compare-versions": "^6.1.0",
 		"file-url": "^4.0.0",
